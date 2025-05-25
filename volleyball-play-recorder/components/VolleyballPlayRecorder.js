@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Square, RotateCcw, Save, Trash2, Edit3, Check, X, Share2, Heart, Download, Tag } from 'lucide-react';
+import { Play, Square, RotateCcw, Save, Trash2, Edit3, Check, X, Share2, Download } from 'lucide-react';
 
 const VolleyballPlayRecorder = () => {
   const [homeTeam, setHomeTeam] = useState([
@@ -25,20 +25,26 @@ const VolleyballPlayRecorder = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedSteps, setRecordedSteps] = useState([]);
   const [savedPlays, setSavedPlays] = useState([]);
-  const [communityPlays, setCommunityPlays] = useState([]);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [playName, setPlayName] = useState('');
   const [playDescription, setPlayDescription] = useState('');
   const [currentPlay, setCurrentPlay] = useState(null);
   const [isReplaying, setIsReplaying] = useState(false);
   const [replayProgress, setReplayProgress] = useState(0);
+  const [shareDialogPlay, setShareDialogPlay] = useState(null);
+  const [showShareCodeDialog, setShowShareCodeDialog] = useState(false);
+  const [showLoadCodeDialog, setShowLoadCodeDialog] = useState(false);
+  const [shareCode, setShareCode] = useState('');
+  const [loadCode, setLoadCode] = useState('');
+  const [loadCodeError, setLoadCodeError] = useState('');
+  const [editingPlayer, setEditingPlayer] = useState(null);
+  const [tempName, setTempName] = useState('');
+  const [showPlayerDrawer, setShowPlayerDrawer] = useState(false);
+  const [showPlaysDrawer, setShowPlaysDrawer] = useState(false);
+  const [draggedItem, setDraggedItem] = useState(null);
   const [isCreatingArrow, setIsCreatingArrow] = useState(false);
   const [arrowStart, setArrowStart] = useState(null);
   const [currentArrow, setCurrentArrow] = useState(null);
-  const [draggedItem, setDraggedItem] = useState(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
-  const [activeTab, setActiveTab] = useState('saved');
-  const [shareDialogPlay, setShareDialogPlay] = useState(null);
   
   const [animationPositions, setAnimationPositions] = useState({
     homeTeam: [...homeTeam],
@@ -46,101 +52,23 @@ const VolleyballPlayRecorder = () => {
     ball: { ...ball }
   });
 
-  const [editingPlayer, setEditingPlayer] = useState(null);
-  const [tempName, setTempName] = useState('');
-  const [showPlayerDrawer, setShowPlayerDrawer] = useState(false);
-  const [showPlaysDrawer, setShowPlaysDrawer] = useState(false);
-
   const courtWidth = 800;
   const courtHeight = 960;
 
-  // Initialize community plays with some sample data
+  // Save plays to localStorage whenever savedPlays changes
   useEffect(() => {
-    const sampleCommunityPlays = [
-      {
-        id: 'community-1',
-        name: 'Quick Attack Set',
-        description: 'Fast-paced offensive play targeting the weak side',
-        steps: [
-          {
-            id: Date.now() + 1,
-            movements: [
-              { id: 3, type: 'home', startX: 400, startY: 540, endX: 450, endY: 480, uniqueId: 'sample-1' },
-              { id: 1, type: 'home', startX: 680, startY: 750, endX: 600, endY: 650, uniqueId: 'sample-2' }
-            ],
-            startPositions: {
-              homeTeam: [
-                { id: 1, x: 680, y: 750, position: '1', name: 'Setter' },
-                { id: 2, x: 680, y: 540, position: '2', name: 'Outside' },
-                { id: 3, x: 400, y: 540, position: '3', name: 'Middle' },
-                { id: 4, x: 120, y: 540, position: '4', name: 'Opposite' },
-                { id: 5, x: 120, y: 750, position: '5', name: 'Libero' },
-                { id: 6, x: 400, y: 750, position: '6', name: 'Back Row' }
-              ],
-              awayTeam: [
-                { id: 7, x: 120, y: 210, position: '1', name: 'Player 1' },
-                { id: 8, x: 120, y: 420, position: '2', name: 'Player 2' },
-                { id: 9, x: 400, y: 420, position: '3', name: 'Player 3' },
-                { id: 10, x: 680, y: 420, position: '4', name: 'Player 4' },
-                { id: 11, x: 680, y: 210, position: '5', name: 'Player 5' },
-                { id: 12, x: 400, y: 210, position: '6', name: 'Player 6' }
-              ],
-              ball: { x: 400, y: 480, visible: true }
-            }
-          }
-        ],
-        author: 'Coach Martinez',
-        shared: true,
-        createdAt: '2025-05-20 10:30 AM',
-        likes: 24,
-        category: 'Offense'
-      },
-      {
-        id: 'community-2',
-        name: 'Defensive Rotation',
-        description: 'Coordinated defensive movement against cross-court attack',
-        steps: [
-          {
-            id: Date.now() + 2,
-            movements: [
-              { id: 7, type: 'away', startX: 120, startY: 210, endX: 200, endY: 300, uniqueId: 'sample-3' },
-              { id: 9, type: 'away', startX: 400, startY: 420, endX: 350, endY: 380, uniqueId: 'sample-4' }
-            ],
-            startPositions: {
-              homeTeam: [
-                { id: 1, x: 680, y: 750, position: '1', name: 'Player 1' },
-                { id: 2, x: 680, y: 540, position: '2', name: 'Player 2' },
-                { id: 3, x: 400, y: 540, position: '3', name: 'Player 3' },
-                { id: 4, x: 120, y: 540, position: '4', name: 'Player 4' },
-                { id: 5, x: 120, y: 750, position: '5', name: 'Player 5' },
-                { id: 6, x: 400, y: 750, position: '6', name: 'Player 6' }
-              ],
-              awayTeam: [
-                { id: 7, x: 120, y: 210, position: '1', name: 'Setter' },
-                { id: 8, x: 120, y: 420, position: '2', name: 'Libero' },
-                { id: 9, x: 400, y: 420, position: '3', name: 'Middle' },
-                { id: 10, x: 680, y: 420, position: '4', name: 'Outside' },
-                { id: 11, x: 680, y: 210, position: '5', name: 'Opposite' },
-                { id: 12, x: 400, y: 210, position: '6', name: 'Back Row' }
-              ],
-              ball: { x: 400, y: 480, visible: false }
-            }
-          }
-        ],
-        author: 'Team Captain Sarah',
-        shared: true,
-        createdAt: '2025-05-22 2:15 PM',
-        likes: 18,
-        category: 'Defense'
-      }
-    ];
-    setCommunityPlays(sampleCommunityPlays);
-  }, []);
+    try {
+      const playsData = JSON.stringify(savedPlays);
+      sessionStorage.setItem('volleyballSavedPlays', playsData);
+    } catch (error) {
+      console.error('Error saving plays:', error);
+    }
+  }, [savedPlays]);
 
   // Load saved plays from localStorage on component mount
   useEffect(() => {
     try {
-      const savedPlaysData = localStorage.getItem('volleyballSavedPlays');
+      const savedPlaysData = sessionStorage.getItem('volleyballSavedPlays');
       if (savedPlaysData) {
         const parsedPlays = JSON.parse(savedPlaysData);
         setSavedPlays(parsedPlays);
@@ -150,67 +78,16 @@ const VolleyballPlayRecorder = () => {
     }
   }, []);
 
-  // Load player names from localStorage on component mount
+  // Update animation positions when not replaying
   useEffect(() => {
-    try {
-      const savedPlayerData = localStorage.getItem('volleyballPlayerNames');
-      if (savedPlayerData) {
-        const { homeTeam: savedHomeTeam, awayTeam: savedAwayTeam } = JSON.parse(savedPlayerData);
-        setHomeTeam(savedHomeTeam);
-        setAwayTeam(savedAwayTeam);
-      }
-    } catch (error) {
-      console.error('Error loading player names:', error);
+    if (!isReplaying) {
+      setAnimationPositions({
+        homeTeam: [...homeTeam],
+        awayTeam: [...awayTeam],
+        ball: { ...ball }
+      });
     }
-  }, []);
-
-  // Save plays to localStorage whenever savedPlays changes
-  useEffect(() => {
-    try {
-      localStorage.setItem('volleyballSavedPlays', JSON.stringify(savedPlays));
-    } catch (error) {
-      console.error('Error saving plays:', error);
-    }
-  }, [savedPlays]);
-
-  // Save player names to localStorage whenever teams change
-  useEffect(() => {
-    try {
-      localStorage.setItem('volleyballPlayerNames', JSON.stringify({
-        homeTeam,
-        awayTeam
-      }));
-    } catch (error) {
-      console.error('Error saving player names:', error);
-    }
-  }, [homeTeam, awayTeam]);
-
-  const startEditingPlayer = (player, team) => {
-    setEditingPlayer({ ...player, team });
-    setTempName(player.name);
-  };
-
-  const savePlayerName = () => {
-    if (!editingPlayer || !tempName.trim()) return;
-    
-    if (editingPlayer.team === 'home') {
-      setHomeTeam(prev => prev.map(player => 
-        player.id === editingPlayer.id ? { ...player, name: tempName.trim() } : player
-      ));
-    } else {
-      setAwayTeam(prev => prev.map(player => 
-        player.id === editingPlayer.id ? { ...player, name: tempName.trim() } : player
-      ));
-    }
-    
-    setEditingPlayer(null);
-    setTempName('');
-  };
-
-  const cancelEditingPlayer = () => {
-    setEditingPlayer(null);
-    setTempName('');
-  };
+  }, [homeTeam, awayTeam, ball, isReplaying]);
 
   const handleMouseDown = (e, item, type) => {
     if (isReplaying) return;
@@ -225,12 +102,11 @@ const VolleyballPlayRecorder = () => {
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     
     if (isRecording) {
-      // Check if this player/ball already has an arrow
+      // Recording mode - create arrows
       const existingArrowIndex = movementArrows.findIndex(arrow => 
         arrow.type === type && arrow.id === item.id
       );
       
-      // If there's an existing arrow, remove it (we'll create a new one)
       if (existingArrowIndex !== -1) {
         setMovementArrows(prev => prev.filter((_, index) => index !== existingArrowIndex));
       }
@@ -245,11 +121,8 @@ const VolleyballPlayRecorder = () => {
         screenY: clientY - rect.top
       });
     } else {
+      // Setup mode - drag to move
       setDraggedItem({ ...item, type });
-      setDragOffset({
-        x: clientX - rect.left - item.x,
-        y: clientY - rect.top - item.y
-      });
     }
   };
 
@@ -298,28 +171,12 @@ const VolleyballPlayRecorder = () => {
         setHomeTeam(prev => prev.map(player => 
           player.id === draggedItem.id ? { ...player, x: newX, y: newY } : player
         ));
-        setAnimationPositions(prev => ({
-          ...prev,
-          homeTeam: prev.homeTeam.map(player => 
-            player.id === draggedItem.id ? { ...player, x: newX, y: newY } : player
-          )
-        }));
       } else if (draggedItem.type === 'away') {
         setAwayTeam(prev => prev.map(player => 
           player.id === draggedItem.id ? { ...player, x: newX, y: newY } : player
         ));
-        setAnimationPositions(prev => ({
-          ...prev,
-          awayTeam: prev.awayTeam.map(player => 
-            player.id === draggedItem.id ? { ...player, x: newX, y: newY } : player
-          )
-        }));
       } else if (draggedItem.type === 'ball') {
         setBall(prev => ({ ...prev, x: newX, y: newY }));
-        setAnimationPositions(prev => ({
-          ...prev,
-          ball: { ...prev.ball, x: newX, y: newY }
-        }));
       }
     }
   };
@@ -363,12 +220,7 @@ const VolleyballPlayRecorder = () => {
       ball: { ...ball }
     };
     
-    const step = {
-      id: Date.now(),
-      movements: [...movementArrows],
-      startPositions: currentPositions
-    };
-    
+    // Calculate end positions based on movement arrows
     const endPositions = {
       homeTeam: currentPositions.homeTeam.map(player => {
         const arrow = movementArrows.find(a => a.type === 'home' && a.id === player.id);
@@ -381,6 +233,7 @@ const VolleyballPlayRecorder = () => {
       ball: { ...currentPositions.ball }
     };
     
+    // Update ball position if there's a ball arrow
     const ballArrow = movementArrows.find(a => a.type === 'ball');
     if (ballArrow) {
       endPositions.ball = {
@@ -390,17 +243,21 @@ const VolleyballPlayRecorder = () => {
       };
     }
     
-    step.endPositions = endPositions;
+    const step = {
+      id: Date.now(),
+      movements: [...movementArrows],
+      startPositions: currentPositions,
+      endPositions: endPositions
+    };
+    
     setRecordedSteps(prev => [...prev, step]);
     
+    // Actually move the players to their new positions
     setHomeTeam([...endPositions.homeTeam]);
     setAwayTeam([...endPositions.awayTeam]);
     setBall({ ...endPositions.ball });
     
-    setMovementArrows([]);
-  };
-
-  const clearArrows = () => {
+    // Clear arrows for next step
     setMovementArrows([]);
   };
 
@@ -422,22 +279,10 @@ const VolleyballPlayRecorder = () => {
       description: playDescription.trim(),
       steps: [...recordedSteps],
       author: 'You',
-      shared: false,
-      createdAt: new Date().toLocaleString(),
-      likes: 0,
-      category: 'Custom'
+      createdAt: new Date().toLocaleString()
     };
     
     setSavedPlays(prev => [...prev, play]);
-    setPlayName('');
-    setPlayDescription('');
-    setShowSaveDialog(false);
-    setIsRecording(false);
-    setRecordedSteps([]);
-    setMovementArrows([]);
-  };
-
-  const cancelSave = () => {
     setPlayName('');
     setPlayDescription('');
     setShowSaveDialog(false);
@@ -455,6 +300,13 @@ const VolleyballPlayRecorder = () => {
       setHomeTeam([...firstStep.startPositions.homeTeam]);
       setAwayTeam([...firstStep.startPositions.awayTeam]);
       setBall({ ...firstStep.startPositions.ball });
+      
+      // Update animation positions
+      setAnimationPositions({
+        homeTeam: [...firstStep.startPositions.homeTeam],
+        awayTeam: [...firstStep.startPositions.awayTeam],
+        ball: { ...firstStep.startPositions.ball }
+      });
     }
   };
 
@@ -466,36 +318,82 @@ const VolleyballPlayRecorder = () => {
   };
 
   const sharePlay = (play) => {
-    const sharedPlay = {
-      ...play,
-      id: `community-${Date.now()}`,
-      shared: true,
-      likes: 0,
-      createdAt: new Date().toLocaleString()
-    };
-    setCommunityPlays(prev => [sharedPlay, ...prev]);
+    const playData = JSON.stringify(play);
+    const encoded = btoa(playData);
+    const shareCode = encoded.slice(0, 8).toUpperCase();
+    
+    sessionStorage.setItem(`play_${shareCode}`, playData);
+    
+    setShareCode(shareCode);
+    setShowShareCodeDialog(true);
     setShareDialogPlay(null);
   };
 
-  const saveFromCommunity = (communityPlay) => {
-    const savedPlay = {
-      ...communityPlay,
-      id: Date.now(),
-      shared: false,
-      author: `From ${communityPlay.author}`,
-      createdAt: new Date().toLocaleString()
-    };
-    setSavedPlays(prev => [...prev, savedPlay]);
+  const loadPlayFromCode = () => {
+    setLoadCodeError('');
+    if (!loadCode.trim()) {
+      setLoadCodeError('Please enter a share code');
+      return;
+    }
+
+    try {
+      const cleanCode = loadCode.trim().toUpperCase();
+      const playData = sessionStorage.getItem(`play_${cleanCode}`);
+      
+      if (!playData) {
+        setLoadCodeError('Share code not found. Make sure the code is correct.');
+        return;
+      }
+
+      const play = JSON.parse(playData);
+      loadPlay(play);
+      setShowLoadCodeDialog(false);
+      setLoadCode('');
+      setShowPlaysDrawer(false);
+      
+      alert(`Successfully loaded "${play.name}"!`);
+    } catch (error) {
+      setLoadCodeError('Invalid share code format');
+    }
   };
 
-  const likePlay = (playId) => {
-    setCommunityPlays(prev => prev.map(play => 
-      play.id === playId 
-        ? { ...play, likes: play.likes + 1 }
-        : play
-    ));
+  const copyShareCode = () => {
+    navigator.clipboard.writeText(shareCode).then(() => {
+      alert('Share code copied to clipboard!');
+    }).catch(() => {
+      const textArea = document.createElement('textarea');
+      textArea.value = shareCode;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      alert('Share code copied to clipboard!');
+    });
   };
 
+  const startEditingPlayer = (player, team) => {
+    setEditingPlayer({ ...player, team });
+    setTempName(player.name);
+  };
+
+  const savePlayerName = () => {
+    if (!editingPlayer || !tempName.trim()) return;
+    
+    if (editingPlayer.team === 'home') {
+      setHomeTeam(prev => prev.map(player => 
+        player.id === editingPlayer.id ? { ...player, name: tempName.trim() } : player
+      ));
+    } else {
+      setAwayTeam(prev => prev.map(player => 
+        player.id === editingPlayer.id ? { ...player, name: tempName.trim() } : player
+      ));
+    }
+    
+    setEditingPlayer(null);
+    setTempName('');
+  };
+
+  // Replay functionality
   const animateStep = (step, duration = 2000) => {
     return new Promise((resolve) => {
       const startTime = Date.now();
@@ -553,12 +451,15 @@ const VolleyballPlayRecorder = () => {
     setIsReplaying(true);
     setReplayProgress(0);
     
+    // Set to initial positions
     const initialStep = recordedSteps[0];
     setAnimationPositions(initialStep.startPositions);
     
+    // Animate through each step
     for (let i = 0; i < recordedSteps.length; i++) {
       setReplayProgress(i);
       await animateStep(recordedSteps[i]);
+      // Pause between steps
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     
@@ -594,32 +495,14 @@ const VolleyballPlayRecorder = () => {
     
     setHomeTeam(defaultHome);
     setAwayTeam(defaultAway);
-    setAnimationPositions({
-      homeTeam: defaultHome,
-      awayTeam: defaultAway,
-      ball: { x: 400, y: 480, visible: true }
-    });
   };
 
-  const toggleBall = () => {
-    setBall(prev => ({ ...prev, visible: !prev.visible }));
-  };
-
+  // Use animation positions for display when replaying, otherwise use current positions
   const displayPositions = isReplaying ? animationPositions : {
     homeTeam,
     awayTeam,
     ball
   };
-
-  useEffect(() => {
-    if (!isReplaying) {
-      setAnimationPositions({
-        homeTeam: [...homeTeam],
-        awayTeam: [...awayTeam],
-        ball: { ...ball }
-      });
-    }
-  }, [homeTeam, awayTeam, ball, isReplaying]);
 
   return (
     <div className="w-full max-w-7xl mx-auto p-2 sm:p-4 lg:p-6 bg-gradient-to-br from-gray-900 via-gray-800 to-slate-900 rounded-xl sm:rounded-2xl shadow-2xl">
@@ -655,7 +538,7 @@ const VolleyballPlayRecorder = () => {
             </button>
             
             <button
-              onClick={clearArrows}
+              onClick={() => setMovementArrows([])}
               disabled={movementArrows.length === 0}
               className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 lg:px-5 py-2 sm:py-3 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-amber-500/25 disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed disabled:hover:shadow-none disabled:transform-none transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
             >
@@ -679,9 +562,16 @@ const VolleyballPlayRecorder = () => {
             className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 lg:px-6 py-2 sm:py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-blue-500/25 transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
           >
             <Play size={14} className="sm:w-4 sm:h-4" />
-            <span className="hidden lg:inline">Replay {currentPlay ? `"${currentPlay.name}"` : `(${recordedSteps.length} steps)`}</span>
+            <span className="hidden lg:inline">Replay ({recordedSteps.length} steps)</span>
             <span className="lg:hidden">Replay ({recordedSteps.length})</span>
           </button>
+        )}
+        
+        {isReplaying && (
+          <div className="flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-3 bg-blue-900/30 text-blue-200 rounded-lg border border-blue-800/50 backdrop-blur-sm text-sm sm:text-base">
+            <span className="text-lg sm:text-2xl">🎬</span>
+            <span className="font-bold">Replaying step {replayProgress + 1} of {recordedSteps.length}</span>
+          </div>
         )}
         
         {!isRecording && !isReplaying && (
@@ -728,13 +618,6 @@ const VolleyballPlayRecorder = () => {
             <span className="text-red-300 lg:hidden">({movementArrows.length} movements)</span>
           </div>
         )}
-        {isReplaying && (
-          <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-blue-900/30 text-blue-200 rounded-lg border border-blue-800/50 backdrop-blur-sm text-sm sm:text-base">
-            <span className="text-lg sm:text-2xl">🎬</span>
-            <span className="font-bold">REPLAYING</span>
-            <span className="text-blue-300">- Step {replayProgress + 1} of {recordedSteps.length}</span>
-          </div>
-        )}
         {!isRecording && !isReplaying && recordedSteps.length > 0 && (
           <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-emerald-900/30 text-emerald-200 rounded-lg border border-emerald-800/50 backdrop-blur-sm text-sm sm:text-base">
             <span className="text-lg sm:text-2xl">✅</span>
@@ -744,8 +627,9 @@ const VolleyballPlayRecorder = () => {
         )}
       </div>
 
+      {/* Save Dialog */}
       {showSaveDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4">
           <div className="bg-gradient-to-br from-slate-800 to-gray-900 rounded-2xl border border-slate-700 shadow-2xl p-6 w-full max-w-md">
             <h3 className="text-xl font-bold text-white mb-4 text-center">Save Your Play</h3>
             <p className="text-gray-300 text-sm mb-4 text-center">
@@ -758,16 +642,6 @@ const VolleyballPlayRecorder = () => {
               placeholder="Enter play name (e.g., 'Quick Attack', 'Serve Receive')"
               className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none mb-3"
               autoFocus
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && playName.trim()) {
-                  if (!playDescription.trim()) {
-                    document.querySelector('textarea').focus();
-                  } else {
-                    savePlay();
-                  }
-                }
-                if (e.key === 'Escape') cancelSave();
-              }}
             />
             <textarea
               value={playDescription}
@@ -775,14 +649,15 @@ const VolleyballPlayRecorder = () => {
               placeholder="Optional: Add a description of the play strategy..."
               className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none mb-4 resize-none"
               rows="3"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && e.ctrlKey && playName.trim()) savePlay();
-                if (e.key === 'Escape') cancelSave();
-              }}
             />
             <div className="flex gap-3">
               <button
-                onClick={cancelSave}
+                onClick={() => {
+                  setShowSaveDialog(false);
+                  setIsRecording(false);
+                  setRecordedSteps([]);
+                  setMovementArrows([]);
+                }}
                 className="flex-1 px-4 py-3 bg-slate-600/50 hover:bg-slate-600/70 text-white rounded-lg transition-colors"
               >
                 Don't Save
@@ -799,11 +674,86 @@ const VolleyballPlayRecorder = () => {
         </div>
       )}
 
-      {/* Share Play Dialog */}
-      {shareDialogPlay && (
+      {/* Share Code Dialog - Higher z-index to be in front of drawer */}
+      {showShareCodeDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4">
+          <div className="bg-gradient-to-br from-slate-800 to-gray-900 rounded-2xl border border-slate-700 shadow-2xl p-6 w-full max-w-md">
+            <h3 className="text-xl font-bold text-white mb-4 text-center">Share Code Generated!</h3>
+            <div className="mb-4 p-4 bg-slate-700/30 rounded-lg border border-slate-600/30 text-center">
+              <p className="text-sm text-gray-400 mb-2">Share this code via text or email:</p>
+              <div className="text-3xl font-mono font-bold text-emerald-400 tracking-wider bg-slate-800/50 py-3 px-4 rounded-lg border">
+                {shareCode}
+              </div>
+            </div>
+            <p className="text-gray-300 text-sm mb-4 text-center">
+              Anyone with this code can load your play by clicking "Load Code" and entering it.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowShareCodeDialog(false)}
+                className="flex-1 px-4 py-3 bg-slate-600/50 hover:bg-slate-600/70 text-white rounded-lg transition-colors"
+              >
+                Close
+              </button>
+              <button
+                onClick={copyShareCode}
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-lg font-semibold transition-all"
+              >
+                📋 Copy Code
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Load Code Dialog - Same layer as drawer */}
+      {showLoadCodeDialog && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-gradient-to-br from-slate-800 to-gray-900 rounded-2xl border border-slate-700 shadow-2xl p-6 w-full max-w-md">
-            <h3 className="text-xl font-bold text-white mb-4 text-center">Share Play with Community</h3>
+            <h3 className="text-xl font-bold text-white mb-4 text-center">Load Shared Play</h3>
+            <p className="text-gray-300 text-sm mb-4 text-center">
+              Enter the share code you received to load a play
+            </p>
+            <input
+              type="text"
+              value={loadCode}
+              onChange={(e) => setLoadCode(e.target.value.toUpperCase())}
+              placeholder="Enter 8-character code (e.g., ABC12345)"
+              className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none mb-3 text-center font-mono text-lg tracking-wider"
+              autoFocus
+              maxLength="8"
+            />
+            {loadCodeError && (
+              <p className="text-red-400 text-sm mb-3 text-center">{loadCodeError}</p>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowLoadCodeDialog(false);
+                  setLoadCode('');
+                  setLoadCodeError('');
+                }}
+                className="flex-1 px-4 py-3 bg-slate-600/50 hover:bg-slate-600/70 text-white rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={loadPlayFromCode}
+                disabled={!loadCode.trim()}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-lg font-semibold disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed transition-all"
+              >
+                Load Play
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Share Play Dialog - Higher z-index to be in front of drawer */}
+      {shareDialogPlay && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4">
+          <div className="bg-gradient-to-br from-slate-800 to-gray-900 rounded-2xl border border-slate-700 shadow-2xl p-6 w-full max-w-md">
+            <h3 className="text-xl font-bold text-white mb-4 text-center">Generate Share Code</h3>
             <div className="mb-4 p-4 bg-slate-700/30 rounded-lg border border-slate-600/30">
               <h4 className="font-semibold text-white text-base mb-1">{shareDialogPlay.name}</h4>
               <p className="text-sm text-gray-400">{shareDialogPlay.steps.length} steps</p>
@@ -812,7 +762,7 @@ const VolleyballPlayRecorder = () => {
               )}
             </div>
             <p className="text-gray-300 text-sm mb-4 text-center">
-              Share this play with the volleyball community so others can learn from your strategy!
+              Generate a share code that others can use to load this play on their device.
             </p>
             <div className="flex gap-3">
               <button
@@ -826,7 +776,7 @@ const VolleyballPlayRecorder = () => {
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-lg font-semibold transition-all"
               >
                 <Share2 size={16} />
-                Share Play
+                Generate Code
               </button>
             </div>
           </div>
@@ -864,14 +814,6 @@ const VolleyballPlayRecorder = () => {
                       className="flex-1 px-3 py-3 text-base bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none backdrop-blur-sm min-w-0"
                       autoFocus
                       placeholder="Enter player name"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') savePlayerName();
-                        if (e.key === 'Escape') cancelEditingPlayer();
-                      }}
-                      onBlur={() => {
-                        if (tempName.trim()) savePlayerName();
-                        else cancelEditingPlayer();
-                      }}
                     />
                     <div className="flex gap-1 flex-shrink-0">
                       <button
@@ -882,7 +824,7 @@ const VolleyballPlayRecorder = () => {
                         <Check size={18} />
                       </button>
                       <button
-                        onClick={cancelEditingPlayer}
+                        onClick={() => setEditingPlayer(null)}
                         className="p-3 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors min-w-0 touch-manipulation"
                       >
                         <X size={18} />
@@ -920,14 +862,6 @@ const VolleyballPlayRecorder = () => {
                       className="flex-1 px-3 py-3 text-base bg-slate-700/50 border border-slate-600/50 rounded-lg text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none backdrop-blur-sm min-w-0"
                       autoFocus
                       placeholder="Enter player name"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') savePlayerName();
-                        if (e.key === 'Escape') cancelEditingPlayer();
-                      }}
-                      onBlur={() => {
-                        if (tempName.trim()) savePlayerName();
-                        else cancelEditingPlayer();
-                      }}
                     />
                     <div className="flex gap-1 flex-shrink-0">
                       <button
@@ -938,7 +872,7 @@ const VolleyballPlayRecorder = () => {
                         <Check size={18} />
                       </button>
                       <button
-                        onClick={cancelEditingPlayer}
+                        onClick={() => setEditingPlayer(null)}
                         className="p-3 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors min-w-0 touch-manipulation"
                       >
                         <X size={18} />
@@ -959,29 +893,15 @@ const VolleyballPlayRecorder = () => {
               </div>
             ))}
           </div>
-
-          <div className="mt-6 pt-4 border-t border-slate-600">
-            <button
-              onClick={() => {
-                const resetHome = homeTeam.map(player => ({ ...player, name: `Player ${player.position}` }));
-                const resetAway = awayTeam.map(player => ({ ...player, name: `Player ${player.position}` }));
-                setHomeTeam(resetHome);
-                setAwayTeam(resetAway);
-              }}
-              className="w-full px-4 py-3 bg-slate-600/50 hover:bg-slate-600/70 text-white rounded-lg transition-colors"
-            >
-              Reset All Names
-            </button>
-          </div>
         </div>
       </div>
 
-      {/* Saved Plays Drawer */}
+      {/* Saved Plays Drawer with Load Code button */}
       <div className={`fixed inset-y-0 right-0 z-50 w-80 bg-gradient-to-br from-slate-800/95 to-gray-900/95 backdrop-blur-xl border-l border-slate-700/50 shadow-2xl transform transition-transform duration-300 ease-in-out ${
         showPlaysDrawer ? 'translate-x-0' : 'translate-x-full'
       }`}>
         <div className="flex items-center justify-between p-6 border-b border-slate-700/50">
-          <h3 className="font-bold text-xl text-white">Volleyball Plays</h3>
+          <h3 className="font-bold text-xl text-white">My Saved Plays</h3>
           <button
             onClick={() => setShowPlaysDrawer(false)}
             className="p-2 text-gray-400 hover:text-white hover:bg-slate-600/30 rounded-lg transition-colors"
@@ -990,156 +910,66 @@ const VolleyballPlayRecorder = () => {
           </button>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex border-b border-slate-700/50">
+        {/* Load Code Button within drawer */}
+        <div className="p-6 border-b border-slate-700/50">
           <button
-            onClick={() => setActiveTab('saved')}
-            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-              activeTab === 'saved'
-                ? 'text-blue-400 border-b-2 border-blue-400 bg-blue-900/20'
-                : 'text-gray-400 hover:text-white hover:bg-slate-700/30'
-            }`}
+            onClick={() => setShowLoadCodeDialog(true)}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-cyan-500/25 transform hover:scale-105 transition-all duration-200"
           >
-            My Saved
-          </button>
-          <button
-            onClick={() => setActiveTab('community')}
-            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-              activeTab === 'community'
-                ? 'text-emerald-400 border-b-2 border-emerald-400 bg-emerald-900/20'
-                : 'text-gray-400 hover:text-white hover:bg-slate-700/30'
-            }`}
-          >
-            Play Library
+            <Download size={16} />
+            Load Play from Code
           </button>
         </div>
         
         <div className="p-6 overflow-y-auto h-full pb-24">
-          {activeTab === 'saved' && (
-            <>
-              {savedPlays.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="text-6xl mb-4">🏐</div>
-                  <p className="text-gray-400 text-lg">No saved plays yet</p>
-                  <p className="text-gray-500 text-sm mt-2">Record and save plays to build your playbook</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {savedPlays.map(play => (
-                    <div key={play.id} className="p-4 rounded-lg bg-slate-700/30 border border-slate-600/30 hover:bg-slate-700/50 transition-colors">
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-semibold text-white text-base truncate">{play.name}</h4>
-                          <p className="text-sm text-gray-400">{play.steps.length} steps • {play.createdAt}</p>
-                          {play.description && (
-                            <p className="text-xs text-gray-500 mt-1 line-clamp-2">{play.description}</p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex gap-2 mt-3">
-                        <button
-                          onClick={() => {
-                            loadPlay(play);
-                            setShowPlaysDrawer(false);
-                          }}
-                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-lg transition-colors"
-                        >
-                          <Play size={16} />
-                          Load
-                        </button>
-                        <button
-                          onClick={() => setShareDialogPlay(play)}
-                          className="px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 rounded-lg transition-colors"
-                          title="Share to community"
-                        >
-                          <Share2 size={16} />
-                        </button>
-                        <button
-                          onClick={() => deletePlay(play.id)}
-                          className="px-3 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition-colors"
-                          title="Delete play"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
+          {savedPlays.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="text-6xl mb-4">🏐</div>
+              <p className="text-gray-400 text-lg">No saved plays yet</p>
+              <p className="text-gray-500 text-sm mt-2">Record and save plays to build your playbook</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {savedPlays.map(play => (
+                <div key={play.id} className="p-4 rounded-lg bg-slate-700/30 border border-slate-600/30 hover:bg-slate-700/50 transition-colors">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-white text-base truncate">{play.name}</h4>
+                      <p className="text-sm text-gray-400">{play.steps.length} steps • {play.createdAt}</p>
+                      {play.description && (
+                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">{play.description}</p>
+                      )}
                     </div>
-                  ))}
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      onClick={() => {
+                        loadPlay(play);
+                        setShowPlaysDrawer(false);
+                      }}
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-lg transition-colors"
+                    >
+                      <Play size={16} />
+                      Load
+                    </button>
+                    <button
+                      onClick={() => setShareDialogPlay(play)}
+                      className="px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 rounded-lg transition-colors"
+                      title="Generate share code"
+                    >
+                      <Share2 size={16} />
+                    </button>
+                    <button
+                      onClick={() => deletePlay(play.id)}
+                      className="px-3 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition-colors"
+                      title="Delete play"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
-              )}
-            </>
-          )}
-
-          {activeTab === 'community' && (
-            <>
-              {communityPlays.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="text-6xl mb-4">🌟</div>
-                  <p className="text-gray-400 text-lg">No community plays yet</p>
-                  <p className="text-gray-500 text-sm mt-2">Be the first to share a play with the community!</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {communityPlays.map(play => (
-                    <div key={play.id} className="p-4 rounded-lg bg-gradient-to-br from-slate-700/40 to-slate-800/40 border border-slate-600/30 hover:border-slate-500/50 transition-all">
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h4 className="font-semibold text-white text-base truncate">{play.name}</h4>
-                            <span className={`px-2 py-1 text-xs rounded-full ${
-                              play.category === 'Offense' ? 'bg-orange-500/20 text-orange-300' :
-                              play.category === 'Defense' ? 'bg-blue-500/20 text-blue-300' :
-                              'bg-purple-500/20 text-purple-300'
-                            }`}>
-                              {play.category}
-                            </span>
-                          </div>
-                          <p className="text-sm text-gray-400">
-                            by {play.author} • {play.steps.length} steps
-                          </p>
-                          {play.description && (
-                            <p className="text-xs text-gray-300 mt-2 line-clamp-3">{play.description}</p>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center justify-between mt-3">
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={() => likePlay(play.id)}
-                            className="flex items-center gap-1 px-2 py-1 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
-                          >
-                            <Heart size={14} />
-                            <span className="text-xs">{play.likes}</span>
-                          </button>
-                          <span className="text-xs text-gray-500">{play.createdAt}</span>
-                        </div>
-                        
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => {
-                              loadPlay(play);
-                              setShowPlaysDrawer(false);
-                            }}
-                            className="flex items-center gap-1 px-3 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-lg transition-colors text-sm"
-                          >
-                            <Play size={14} />
-                            Preview
-                          </button>
-                          <button
-                            onClick={() => saveFromCommunity(play)}
-                            className="flex items-center gap-1 px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 rounded-lg transition-colors text-sm"
-                            title="Save to my plays"
-                          >
-                            <Download size={14} />
-                            Save
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
+              ))}
+            </div>
           )}
         </div>
       </div>
@@ -1183,52 +1013,47 @@ const VolleyballPlayRecorder = () => {
               }}
             >
               <defs>
-                <linearGradient id="modernNetGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#0f172a"/>
-                  <stop offset="50%" stopColor="#1e293b"/>
-                  <stop offset="100%" stopColor="#0f172a"/>
-                </linearGradient>
-
                 <g id="modernVolleyball">
-                  <circle cx="0" cy="0" r="18" fill="url(#ballGradient)" stroke="#f59e0b" strokeWidth="3"/>
-                  <path d="M-14,-14 Q0,-18 14,-14" stroke="#f59e0b" strokeWidth="2" fill="none"/>
-                  <path d="M-14,14 Q0,18 14,14" stroke="#f59e0b" strokeWidth="2" fill="none"/>
-                  <path d="M-14,-14 Q-18,0 -14,14" stroke="#f59e0b" strokeWidth="2" fill="none"/>
-                  <path d="M14,-14 Q18,0 14,14" stroke="#f59e0b" strokeWidth="2" fill="none"/>
-                  <line x1="-14" y1="-14" x2="14" y2="14" stroke="#f59e0b" strokeWidth="2"/>
-                  <line x1="14" y1="-14" x2="-14" y2="14" stroke="#f59e0b" strokeWidth="2"/>
+                  <circle cx="0" cy="0" r="18" fill="#f59e0b" stroke="#f59e0b" strokeWidth="3"/>
+                  <path d="M-14,-14 Q0,-18 14,-14" stroke="#d97706" strokeWidth="2" fill="none"/>
+                  <path d="M-14,14 Q0,18 14,14" stroke="#d97706" strokeWidth="2" fill="none"/>
+                  <path d="M-14,-14 Q-18,0 -14,14" stroke="#d97706" strokeWidth="2" fill="none"/>
+                  <path d="M14,-14 Q18,0 14,14" stroke="#d97706" strokeWidth="2" fill="none"/>
+                  <line x1="-14" y1="-14" x2="14" y2="14" stroke="#d97706" strokeWidth="2"/>
+                  <line x1="14" y1="-14" x2="-14" y2="14" stroke="#d97706" strokeWidth="2"/>
                 </g>
-
-                <radialGradient id="ballGradient" cx="30%" cy="30%">
-                  <stop offset="0%" stopColor="#fbbf24"/>
-                  <stop offset="100%" stopColor="#f59e0b"/>
-                </radialGradient>
               </defs>
               
               <rect width={courtWidth} height={courtHeight} fill="transparent"/>
               
+              {/* Court boundaries */}
               <rect x="60" y="60" width={courtWidth-120} height={courtHeight-120} 
                     fill="none" stroke="white" strokeWidth="8" rx="16"/>
               
+              {/* Net */}
               <line x1="60" y1={courtHeight/2} x2={courtWidth-60} y2={courtHeight/2} 
                     stroke="white" strokeWidth="8"/>
               
+              {/* Attack lines */}
               <line x1="60" y1={courtHeight/2 - 150} x2={courtWidth-60} y2={courtHeight/2 - 150} 
                     stroke="white" strokeWidth="5" strokeDasharray="15,8" opacity="0.9"/>
               <line x1="60" y1={courtHeight/2 + 150} x2={courtWidth-60} y2={courtHeight/2 + 150} 
                     stroke="white" strokeWidth="5" strokeDasharray="15,8" opacity="0.9"/>
               
+              {/* Net post */}
               <rect x="60" y={courtHeight/2 - 6} width={courtWidth-120} height="12" 
-                    fill="url(#modernNetGradient)" rx="6"/>
+                    fill="#1e293b" rx="6"/>
               
+              {/* Team labels */}
               <text x="90" y="45" fill="white" fontSize="24" fontWeight="bold">AWAY TEAM</text>
               <text x="90" y={courtHeight - 15} fill="white" fontSize="24" fontWeight="bold">HOME TEAM</text>
 
+              {/* Movement arrows */}
               {movementArrows.map(arrow => (
                 <g key={arrow.uniqueId}>
                   <defs>
                     <marker
-                      id={`modernArrowhead-${arrow.uniqueId}`}
+                      id={`arrowhead-${arrow.uniqueId}`}
                       markerWidth="12"
                       markerHeight="8"
                       refX="11"
@@ -1248,12 +1073,13 @@ const VolleyballPlayRecorder = () => {
                     y2={arrow.endY}
                     stroke={arrow.type === 'ball' ? '#f59e0b' : arrow.type === 'home' ? '#3b82f6' : '#ef4444'}
                     strokeWidth="4"
-                    markerEnd={`url(#modernArrowhead-${arrow.uniqueId})`}
+                    markerEnd={`url(#arrowhead-${arrow.uniqueId})`}
                     opacity="0.9"
                   />
                 </g>
               ))}
 
+              {/* Current arrow being drawn */}
               {currentArrow && (
                 <line
                   x1={currentArrow.startX}
@@ -1267,19 +1093,13 @@ const VolleyballPlayRecorder = () => {
                 />
               )}
 
+              {/* Away Team Players */}
               {displayPositions.awayTeam.map(player => (
                 <g key={player.id} 
                    className="cursor-grab hover:brightness-110 transition-all duration-200"
                    onMouseDown={(e) => !isReplaying && handleMouseDown(e, player, 'away')}
                    onTouchStart={(e) => !isReplaying && handleMouseDown(e, player, 'away')}
                    style={{ userSelect: 'none' }}>
-                  <defs>
-                    <radialGradient id={`modernAwayGradient-${player.id}`} cx="25%" cy="25%">
-                      <stop offset="0%" stopColor="#F87171"/>
-                      <stop offset="70%" stopColor="#EF4444"/>
-                      <stop offset="100%" stopColor="#DC2626"/>
-                    </radialGradient>
-                  </defs>
                   <circle
                     cx={player.x}
                     cy={player.y}
@@ -1291,7 +1111,7 @@ const VolleyballPlayRecorder = () => {
                     cx={player.x}
                     cy={player.y}
                     r="26"
-                    fill={`url(#modernAwayGradient-${player.id})`}
+                    fill="#ef4444"
                     stroke="white"
                     strokeWidth="4"
                   />
@@ -1320,19 +1140,13 @@ const VolleyballPlayRecorder = () => {
                 </g>
               ))}
 
+              {/* Home Team Players */}
               {displayPositions.homeTeam.map(player => (
                 <g key={player.id}
                    className="cursor-grab hover:brightness-110 transition-all duration-200"
                    onMouseDown={(e) => !isReplaying && handleMouseDown(e, player, 'home')}
                    onTouchStart={(e) => !isReplaying && handleMouseDown(e, player, 'home')}
                    style={{ userSelect: 'none' }}>
-                  <defs>
-                    <radialGradient id={`modernHomeGradient-${player.id}`} cx="25%" cy="25%">
-                      <stop offset="0%" stopColor="#60A5FA"/>
-                      <stop offset="70%" stopColor="#3B82F6"/>
-                      <stop offset="100%" stopColor="#1E40AF"/>
-                    </radialGradient>
-                  </defs>
                   <circle
                     cx={player.x}
                     cy={player.y}
@@ -1344,7 +1158,7 @@ const VolleyballPlayRecorder = () => {
                     cx={player.x}
                     cy={player.y}
                     r="26"
-                    fill={`url(#modernHomeGradient-${player.id})`}
+                    fill="#3b82f6"
                     stroke="white"
                     strokeWidth="4"
                   />
@@ -1373,6 +1187,7 @@ const VolleyballPlayRecorder = () => {
                 </g>
               ))}
 
+              {/* Ball */}
               {displayPositions.ball.visible && (
                 <g className="cursor-grab hover:brightness-110 transition-all duration-200"
                    onMouseDown={(e) => !isReplaying && handleMouseDown(e, displayPositions.ball, 'ball')}
@@ -1398,30 +1213,30 @@ const VolleyballPlayRecorder = () => {
       </div>
 
       <div className="mt-4 sm:mt-6 lg:mt-8 p-3 sm:p-4 lg:p-6 bg-gradient-to-br from-slate-800 to-gray-900 rounded-xl sm:rounded-2xl border border-slate-700 shadow-2xl">
-        <h3 className="font-bold text-lg sm:text-xl text-white mb-3 sm:mb-4 text-center">How to Create Professional Volleyball Plays</h3>
+        <h3 className="font-bold text-lg sm:text-xl text-white mb-3 sm:mb-4 text-center">How to Create & Share Volleyball Plays</h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
           <div>
             <h4 className="font-semibold text-blue-400 mb-2 sm:mb-3 text-sm sm:text-base">Setup & Recording</h4>
             <ol className="list-decimal list-inside space-y-1 sm:space-y-2 text-xs sm:text-sm text-gray-300">
               <li><strong className="text-white">Initial Setup:</strong> <span className="hidden sm:inline">Drag players and ball to starting positions</span><span className="sm:hidden">Touch & drag players to position</span></li>
-              <li><strong className="text-white">Player Names:</strong> Click "Edit<span className="hidden sm:inline"> Players</span>" to customize team rosters</li>
+              <li><strong className="text-white">Player Names:</strong> Click "Players" to customize team rosters</li>
               <li><strong className="text-white">Start Recording:</strong> Click the red record button to begin</li>
-              <li><strong className="text-white">Create Movements:</strong> <span className="hidden sm:inline">Drag from players/ball to show movement paths (one per player)</span><span className="sm:hidden">Touch & drag from players to create arrows</span></li>
+              <li><strong className="text-white">Create Movements:</strong> <span className="hidden sm:inline">Drag from players/ball to show movement paths</span><span className="sm:hidden">Touch & drag from players to create arrows</span></li>
             </ol>
           </div>
           <div>
-            <h4 className="font-semibold text-green-400 mb-2 sm:mb-3 text-sm sm:text-base">Community & Sharing</h4>
+            <h4 className="font-semibold text-green-400 mb-2 sm:mb-3 text-sm sm:text-base">Sharing System</h4>
             <ol className="list-decimal list-inside space-y-1 sm:space-y-2 text-xs sm:text-sm text-gray-300" start="5">
               <li><strong className="text-white">Save Steps:</strong> Build plays step by step with multiple movements</li>
-              <li><strong className="text-white">Share Plays:</strong> Share your strategies with the volleyball community</li>
-              <li><strong className="text-white">Browse Library:</strong> Discover and save plays from other coaches</li>
+              <li><strong className="text-white">Generate Share Code:</strong> Create 8-character codes to share plays</li>
+              <li><strong className="text-white">Load Shared Plays:</strong> Enter codes from others to view their plays</li>
               <li><strong className="text-white">Professional Replay:</strong> Watch smooth animated playback anytime</li>
             </ol>
           </div>
         </div>
         <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-600">
           <p className="text-xs text-slate-400 text-center">
-            <strong className="text-slate-300">Pro Tip:</strong> <span className="hidden sm:inline">Each player can only have one movement arrow per step. Save plays with descriptions, share them with the community, and build your coaching library by saving plays from other users.</span><span className="sm:hidden">One arrow per player/ball per step. Share and discover plays in the community library.</span>
+            <strong className="text-slate-300">Share via Text:</strong> <span className="hidden sm:inline">Generate share codes and send them via text message or email. Recipients just click "Load Code" and enter the 8-character code to instantly view your play.</span><span className="sm:hidden">Generate codes to share plays via text. Recipients enter codes to load plays instantly.</span>
           </p>
         </div>
       </div>

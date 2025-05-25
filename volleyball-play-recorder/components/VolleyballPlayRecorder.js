@@ -263,7 +263,9 @@ const VolleyballPlayRecorder = () => {
 
   const stopRecording = () => {
     if (recordedSteps.length > 0) {
-      setShowSaveDialog(true);
+      // Don't automatically show save dialog - let user preview first
+      setIsRecording(false);
+      setMovementArrows([]);
     } else {
       setIsRecording(false);
       setMovementArrows([]);
@@ -319,23 +321,64 @@ const VolleyballPlayRecorder = () => {
 
   const sharePlay = (play) => {
     try {
-      const playData = JSON.stringify(play);
-      const encoded = btoa(unescape(encodeURIComponent(playData)));
-      const shareCode = encoded.slice(0, 12).toUpperCase();
+      // Create a simple, minimal version
+      const simplePlay = {
+        name: play.name,
+        description: play.description || '',
+        steps: play.steps.map(step => ({
+          movements: step.movements.map(mov => ({
+            id: mov.id,
+            type: mov.type,
+            startX: Math.round(mov.startX),
+            startY: Math.round(mov.startY),
+            endX: Math.round(mov.endX),
+            endY: Math.round(mov.endY)
+          })),
+          startPositions: {
+            homeTeam: step.startPositions.homeTeam.map(p => ({
+              id: p.id,
+              x: Math.round(p.x),
+              y: Math.round(p.y),
+              name: p.name,
+              position: p.position
+            })),
+            awayTeam: step.startPositions.awayTeam.map(p => ({
+              id: p.id,
+              x: Math.round(p.x),
+              y: Math.round(p.y),
+              name: p.name,
+              position: p.position
+            })),
+            ball: {
+              x: Math.round(step.startPositions.ball.x),
+              y: Math.round(step.startPositions.ball.y),
+              visible: step.startPositions.ball.visible
+            }
+          }
+        }))
+      };
       
-      // Store locally as backup
-      sessionStorage.setItem(`play_${shareCode}`, playData);
+      // Simple JSON stringify and base64 encode
+      const jsonStr = JSON.stringify(simplePlay);
+      const encoded = btoa(unescape(encodeURIComponent(jsonStr)));
       
-      // Create shareable URL
+      // Store backup with a simple code
+      const shortCode = encoded.slice(0, 8).toUpperCase();
+      sessionStorage.setItem(`play_${shortCode}`, JSON.stringify(play));
+      
       const currentUrl = window.location.origin + window.location.pathname;
-      const shareUrl = `${currentUrl}?play=${encoded}`;
+      const shareUrl = `${currentUrl}?share=${encoded}`;
       
       setShareCode(shareUrl);
       setShowShareCodeDialog(true);
       setShareDialogPlay(null);
+      
+      console.log('Generated share URL:', shareUrl);
+      console.log('Short code backup:', shortCode);
+      
     } catch (error) {
       console.error('Error sharing play:', error);
-      alert('Error creating share link. Play data might be too large.');
+      alert('Error creating share link: ' + error.message);
     }
   };
 
@@ -350,8 +393,218 @@ const VolleyballPlayRecorder = () => {
       let playData = null;
       const cleanCode = loadCode.trim();
       
-      // Try to parse as URL first
-      if (cleanCode.includes('?play=')) {
+      // Try new ultra-compressed format
+      if (cleanCode.includes('?v=')) {
+        const url = new URL(cleanCode);
+        const encodedPlay = url.searchParams.get('v');
+        if (encodedPlay) {
+          try {
+            // Reverse the compression process
+            const restored = encodedPlay
+              .split('')
+              .map(c => {
+                const code = c.charCodeAt(0);
+                return code > 96 ? String.fromCharCode(code - 32) : c;
+              })
+              .join('')
+              .replace(/-/g, '+')
+              .replace(/_/g, '/');
+            
+            const padding = '='.repeat((4 - restored.length % 4) % 4);
+            const decodedData = atob(restored + padding);
+            const decompressed = decompressLZ77(decodedData);
+            
+            // Restore JSON format
+            let jsonStr = decompressed
+              .replace(/~/g, 'null')
+              .replace(/n:/g, '"n":')
+              .replace(/d:/g, '"d":')
+              .replace(/s:/g, '"s":')
+              .replace(/'/g, '"');
+            
+            const ultraMinimal = JSON.parse(jsonStr);
+            
+            // Reconstruct full play from ultra-minimal data
+            const fullPlay = {
+              id: Date.now(),
+              name: ultraMinimal.n,
+              description: ultraMinimal.d,
+              author: 'Shared',
+              createdAt: new Date().toLocaleString(),
+              steps: []
+            };
+            
+            // Default positions (volleyball court standard)
+            let currentHome = [
+              { id: 1, x: 680, y: 750, position: '1', name: 'Player 1' },
+              { id: 2, x: 680, y: 540, position: '2', name: 'Player 2' },
+              { id: 3, x: 400, y: 540, position: '3', name: 'Player 3' },
+              { id: 4, x: 120, y: 540, position: '4', name: 'Player 4' },
+              { id: 5, x: 120, y: 750, position: '5', name: 'Player 5' },
+              { id: 6, x: 400, y: 750, position: '6', name: 'Player 6' }
+            ];
+            
+            let currentAway = [
+              { id: 7, x: 120, y: 210, position: '1', name: 'Player 1' },
+              { id: 8, x: 120, y: 420, position: '2', name: 'Player 2' },
+              { id: 9, x: 400, y: 420, position: '3', name: 'Player 3' },
+              { id: 10, x: 680, y: 420, position: '4', name: 'Player 4' },
+              { id: 11, x: 680, y: 210, position: '5', name: 'Player 5' },
+              { id: 12, x: 400, y: 210, position: '6', name: 'Player 6' }
+            ];
+            
+            let currentBall = { x: 400, y: 480, visible: true };
+            
+            ultraMinimal.s.forEach((stepData, stepIndex) => {
+              const movements = stepData[0];
+              const positions = stepData[1]; // Only exists for first step
+              
+              // If this is first step and has position data, use it
+              if (positions && stepIndex === 0) {
+                currentHome = positions[0].map((p, i) => ({
+                  id: i + 1,
+                  x: p[0] * 10, // Scale back up
+                  y: p[1] * 10,
+                  name: p[2],
+                  position: String(i + 1)
+                }));
+                
+                currentAway = positions[1].map((p, i) => ({
+                  id: i + 7,
+                  x: p[0] * 10,
+                  y: p[1] * 10,
+                  name: p[2],
+                  position: String(i + 1)
+                }));
+                
+                currentBall = {
+                  x: positions[2][0] * 10,
+                  y: positions[2][1] * 10,
+                  visible: positions[2][2] === 1
+                };
+              }
+              
+              const startPositions = {
+                homeTeam: [...currentHome],
+                awayTeam: [...currentAway],
+                ball: { ...currentBall }
+              };
+              
+              // Apply movements to get end positions
+              const endHome = [...currentHome];
+              const endAway = [...currentAway];
+              let endBall = { ...currentBall };
+              
+              const fullMovements = movements.map((mov, i) => {
+                const id = mov[0];
+                const type = mov[1] === 0 ? 'home' : mov[1] === 1 ? 'away' : 'ball';
+                const endX = mov[2] * 10; // Scale back up
+                const endY = mov[3] * 10;
+                
+                // Find start position
+                let startX, startY;
+                if (type === 'home') {
+                  const player = currentHome.find(p => p.id === id);
+                  startX = player ? player.x : endX;
+                  startY = player ? player.y : endY;
+                  const endPlayer = endHome.find(p => p.id === id);
+                  if (endPlayer) {
+                    endPlayer.x = endX;
+                    endPlayer.y = endY;
+                  }
+                } else if (type === 'away') {
+                  const player = currentAway.find(p => p.id === id);
+                  startX = player ? player.x : endX;
+                  startY = player ? player.y : endY;
+                  const endPlayer = endAway.find(p => p.id === id);
+                  if (endPlayer) {
+                    endPlayer.x = endX;
+                    endPlayer.y = endY;
+                  }
+                } else { // ball
+                  startX = currentBall.x;
+                  startY = currentBall.y;
+                  endBall = { ...currentBall, x: endX, y: endY };
+                }
+                
+                return {
+                  id,
+                  type,
+                  startX,
+                  startY,
+                  endX,
+                  endY,
+                  uniqueId: `${Date.now()}_${i}`
+                };
+              });
+              
+              const step = {
+                id: Date.now() + stepIndex,
+                movements: fullMovements,
+                startPositions,
+                endPositions: {
+                  homeTeam: endHome,
+                  awayTeam: endAway,
+                  ball: endBall
+                }
+              };
+              
+              fullPlay.steps.push(step);
+              
+              // Update current positions for next step
+              currentHome = endHome;
+              currentAway = endAway;
+              currentBall = endBall;
+            });
+            
+            playData = JSON.stringify(fullPlay);
+          } catch (e) {
+            console.error('Decompression error:', e);
+            throw new Error('Failed to decompress ultra format');
+          }
+        }
+      }
+      // Try previous format
+      else if (cleanCode.includes('?p=')) {
+        const url = new URL(cleanCode);
+        const encodedPlay = url.searchParams.get('p');
+        if (encodedPlay) {
+          const restored = encodedPlay.replace(/-/g, '+').replace(/_/g, '/');
+          const padding = '='.repeat((4 - restored.length % 4) % 4);
+          const decodedData = atob(restored + padding);
+          const minimalPlay = JSON.parse(decodedData);
+          
+          // Reconstruct from previous minimal format
+          const fullPlay = {
+            id: Date.now(),
+            name: minimalPlay.n,
+            description: minimalPlay.d,
+            author: 'Shared',
+            createdAt: new Date().toLocaleString(),
+            steps: minimalPlay.s.map((step, index) => ({
+              id: Date.now() + index,
+              movements: step.m.map((mov, movIndex) => ({
+                id: mov[0],
+                type: mov[1],
+                startX: mov[2],
+                startY: mov[3],
+                endX: mov[4],
+                endY: mov[5],
+                uniqueId: `${Date.now()}_${movIndex}`
+              })),
+              startPositions: {
+                homeTeam: step.sp.h.map(p => ({ id: p[0], x: p[1], y: p[2], name: p[3], position: String(p[0]) })),
+                awayTeam: step.sp.a.map(p => ({ id: p[0], x: p[1], y: p[2], name: p[3], position: String(p[0] - 6) })),
+                ball: { x: step.sp.b[0], y: step.sp.b[1], visible: step.sp.b[2] }
+              }
+            }))
+          };
+          
+          playData = JSON.stringify(fullPlay);
+        }
+      }
+      // Try legacy URL format and other fallbacks...
+      else if (cleanCode.includes('?play=')) {
         const url = new URL(cleanCode);
         const encodedPlay = url.searchParams.get('play');
         if (encodedPlay) {
@@ -359,18 +612,15 @@ const VolleyballPlayRecorder = () => {
           playData = decodedData;
         }
       }
-      // Try as short code (fallback for local storage)
       else if (cleanCode.length <= 12) {
         const upperCode = cleanCode.toUpperCase();
         playData = sessionStorage.getItem(`play_${upperCode}`);
       }
-      // Try as direct base64 encoded data
       else {
         try {
           const decodedData = decodeURIComponent(escape(atob(cleanCode)));
           playData = decodedData;
         } catch (e) {
-          // If base64 decode fails, treat as short code
           const upperCode = cleanCode.toUpperCase();
           playData = sessionStorage.getItem(`play_${upperCode}`);
         }
@@ -551,6 +801,7 @@ const VolleyballPlayRecorder = () => {
       </div>
       
       <div className="flex justify-center gap-2 sm:gap-3 mb-4 sm:mb-6 flex-wrap px-2">
+        {/* Recording Controls */}
         {!isRecording && !isReplaying && (
           <button
             onClick={startRecording}
@@ -581,6 +832,33 @@ const VolleyballPlayRecorder = () => {
               <Trash2 size={14} className="sm:w-4 sm:h-4" />
               <span className="hidden sm:inline">Clear</span>
             </button>
+
+            {recordedSteps.length > 0 && (
+              <button
+                onClick={() => {
+                  const lastStep = recordedSteps[recordedSteps.length - 1];
+                  setRecordedSteps(prev => prev.slice(0, -1));
+                  
+                  // Restore positions to the previous step or initial positions
+                  if (recordedSteps.length > 1) {
+                    const previousStep = recordedSteps[recordedSteps.length - 2];
+                    setHomeTeam([...previousStep.endPositions.homeTeam]);
+                    setAwayTeam([...previousStep.endPositions.awayTeam]);
+                    setBall({ ...previousStep.endPositions.ball });
+                  } else {
+                    // Go back to first step's start positions
+                    setHomeTeam([...lastStep.startPositions.homeTeam]);
+                    setAwayTeam([...lastStep.startPositions.awayTeam]);
+                    setBall({ ...lastStep.startPositions.ball });
+                  }
+                }}
+                className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 lg:px-5 py-2 sm:py-3 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-red-500/25 transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
+              >
+                <RotateCcw size={14} className="sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Undo Step</span>
+                <span className="sm:hidden">Undo</span>
+              </button>
+            )}
             
             <button
               onClick={stopRecording}
@@ -592,14 +870,26 @@ const VolleyballPlayRecorder = () => {
           </>
         )}
         
+        {/* Playback Controls */}
         {!isRecording && !isReplaying && recordedSteps.length > 0 && (
-          <button
-            onClick={replayPlay}
-            className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 lg:px-6 py-2 sm:py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-blue-500/25 transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
-          >
-            <Play size={14} className="sm:w-4 sm:h-4" />
-            Replay
-          </button>
+          <>
+            <button
+              onClick={replayPlay}
+              className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 lg:px-6 py-2 sm:py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-blue-500/25 transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
+            >
+              <Play size={14} className="sm:w-4 sm:h-4" />
+              Replay
+            </button>
+
+            <button
+              onClick={() => setShowSaveDialog(true)}
+              className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 lg:px-6 py-2 sm:py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-emerald-500/25 transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
+            >
+              <Save size={14} className="sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Save Play</span>
+              <span className="sm:hidden">Save</span>
+            </button>
+          </>
         )}
         
         {isReplaying && (
@@ -609,6 +899,17 @@ const VolleyballPlayRecorder = () => {
           </div>
         )}
         
+        <button
+          onClick={resetPlay}
+          className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 lg:px-5 py-2 sm:py-3 bg-gradient-to-r from-slate-600 to-gray-700 hover:from-slate-700 hover:to-gray-800 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-slate-500/25 transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
+        >
+          <RotateCcw size={14} className="sm:w-4 sm:h-4" />
+          <span className="hidden sm:inline">Reset</span>
+        </button>
+      </div>
+
+      {/* Management Controls - Separate Row */}
+      <div className="flex justify-center gap-2 sm:gap-3 mb-4 sm:mb-6 flex-wrap px-2">
         {!isRecording && !isReplaying && (
           <>
             <button
@@ -627,24 +928,9 @@ const VolleyballPlayRecorder = () => {
             </button>
           </>
         )}
-        
-        <button
-          onClick={resetPlay}
-          className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 lg:px-5 py-2 sm:py-3 bg-gradient-to-r from-slate-600 to-gray-700 hover:from-slate-700 hover:to-gray-800 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-slate-500/25 transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
-        >
-          <RotateCcw size={14} className="sm:w-4 sm:h-4" />
-          <span className="hidden sm:inline">Reset</span>
-        </button>
       </div>
 
       <div className="text-center mb-4 sm:mb-6 px-2">
-        {!isRecording && !isReplaying && (
-          <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-slate-800/80 text-slate-200 rounded-lg border border-slate-700/50 backdrop-blur-sm text-sm sm:text-base">
-            <span className="text-lg sm:text-2xl">⚙️</span>
-            <span className="font-medium">SETUP MODE</span>
-            <span className="text-slate-400 hidden sm:inline">- Drag players and ball to position them</span>
-          </div>
-        )}
         {isRecording && (
           <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-red-900/30 text-red-200 rounded-lg border border-red-800/50 backdrop-blur-sm animate-pulse text-sm sm:text-base">
             <span className="text-lg sm:text-2xl">🔴</span>
@@ -657,7 +943,7 @@ const VolleyballPlayRecorder = () => {
           <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-emerald-900/30 text-emerald-200 rounded-lg border border-emerald-800/50 backdrop-blur-sm text-sm sm:text-base">
             <span className="text-lg sm:text-2xl">✅</span>
             <span className="font-bold">Play recorded ({recordedSteps.length} steps)</span>
-            <span className="text-emerald-300 hidden sm:inline">- Ready to replay</span>
+            <span className="text-emerald-300 hidden sm:inline">- Preview with Replay or Save</span>
           </div>
         )}
       </div>
@@ -709,7 +995,7 @@ const VolleyballPlayRecorder = () => {
         </div>
       )}
 
-      {/* Share Code Dialog - Same layer as drawer for mobile */}
+      {/* Share Code Dialog - Same layer as drawer */}
       {showShareCodeDialog && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-gradient-to-br from-slate-800 to-gray-900 rounded-2xl border border-slate-700 shadow-2xl p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
@@ -785,7 +1071,7 @@ const VolleyballPlayRecorder = () => {
 
       {/* Share Play Dialog - Higher z-index to be in front of drawer */}
       {shareDialogPlay && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-gradient-to-br from-slate-800 to-gray-900 rounded-2xl border border-slate-700 shadow-2xl p-6 w-full max-w-md">
             <h3 className="text-xl font-bold text-white mb-4 text-center">Generate Share Code</h3>
             <div className="mb-4 p-4 bg-slate-700/30 rounded-lg border border-slate-600/30">
@@ -944,16 +1230,7 @@ const VolleyballPlayRecorder = () => {
           </button>
         </div>
 
-        {/* Load Code Button within drawer */}
-        <div className="p-6 border-b border-slate-700/50">
-          <button
-            onClick={() => setShowLoadCodeDialog(true)}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-cyan-500/25 transform hover:scale-105 transition-all duration-200"
-          >
-            <Download size={16} />
-            Load Play from URL
-          </button>
-        </div>
+        {/* Load Code Button within drawer - REMOVED */}
         
         <div className="p-6 overflow-y-auto h-full pb-24">
           {savedPlays.length === 0 ? (
@@ -985,13 +1262,6 @@ const VolleyballPlayRecorder = () => {
                     >
                       <Play size={16} />
                       Load
-                    </button>
-                    <button
-                      onClick={() => setShareDialogPlay(play)}
-                      className="px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 rounded-lg transition-colors"
-                      title="Generate share code"
-                    >
-                      <Share2 size={16} />
                     </button>
                     <button
                       onClick={() => deletePlay(play.id)}
@@ -1048,13 +1318,8 @@ const VolleyballPlayRecorder = () => {
             >
               <defs>
                 <g id="modernVolleyball">
-                  <circle cx="0" cy="0" r="18" fill="#f59e0b" stroke="#f59e0b" strokeWidth="3"/>
-                  <path d="M-14,-14 Q0,-18 14,-14" stroke="#d97706" strokeWidth="2" fill="none"/>
-                  <path d="M-14,14 Q0,18 14,14" stroke="#d97706" strokeWidth="2" fill="none"/>
-                  <path d="M-14,-14 Q-18,0 -14,14" stroke="#d97706" strokeWidth="2" fill="none"/>
-                  <path d="M14,-14 Q18,0 14,14" stroke="#d97706" strokeWidth="2" fill="none"/>
-                  <line x1="-14" y1="-14" x2="14" y2="14" stroke="#d97706" strokeWidth="2"/>
-                  <line x1="14" y1="-14" x2="-14" y2="14" stroke="#d97706" strokeWidth="2"/>
+                  {/* Simple white volleyball with thick black outline */}
+                  <circle cx="0" cy="0" r="18" fill="#ffffff" stroke="#000000" strokeWidth="4"/>
                 </g>
               </defs>
               
@@ -1247,7 +1512,7 @@ const VolleyballPlayRecorder = () => {
       </div>
 
       <div className="mt-4 sm:mt-6 lg:mt-8 p-3 sm:p-4 lg:p-6 bg-gradient-to-br from-slate-800 to-gray-900 rounded-xl sm:rounded-2xl border border-slate-700 shadow-2xl">
-        <h3 className="font-bold text-lg sm:text-xl text-white mb-3 sm:mb-4 text-center">How to Create & Share Volleyball Plays</h3>
+        <h3 className="font-bold text-lg sm:text-xl text-white mb-3 sm:mb-4 text-center">How to Create Professional Volleyball Plays</h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
           <div>
             <h4 className="font-semibold text-blue-400 mb-2 sm:mb-3 text-sm sm:text-base">Setup & Recording</h4>
@@ -1259,18 +1524,18 @@ const VolleyballPlayRecorder = () => {
             </ol>
           </div>
           <div>
-            <h4 className="font-semibold text-green-400 mb-2 sm:mb-3 text-sm sm:text-base">Sharing System</h4>
+            <h4 className="font-semibold text-green-400 mb-2 sm:mb-3 text-sm sm:text-base">Advanced Features</h4>
             <ol className="list-decimal list-inside space-y-1 sm:space-y-2 text-xs sm:text-sm text-gray-300" start="5">
               <li><strong className="text-white">Save Steps:</strong> Build plays step by step with multiple movements</li>
-              <li><strong className="text-white">Generate Share URL:</strong> Create shareable links to send plays</li>
-              <li><strong className="text-white">Load Shared Plays:</strong> Enter URLs from others to view their plays</li>
+              <li><strong className="text-white">Name & Save:</strong> Give plays memorable names for easy replay</li>
+              <li><strong className="text-white">Play Library:</strong> Build a collection of saved volleyball plays</li>
               <li><strong className="text-white">Professional Replay:</strong> Watch smooth animated playback anytime</li>
             </ol>
           </div>
         </div>
         <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-600">
           <p className="text-xs text-slate-400 text-center">
-            <strong className="text-slate-300">Share via URL:</strong> <span className="hidden sm:inline">Generate share URLs and send them via text message, email, or social media. Recipients just click the link to instantly view your play on any device.</span><span className="sm:hidden">Generate URLs to share plays via text. Recipients click links to load plays instantly.</span>
+            <strong className="text-slate-300">Pro Tip:</strong> <span className="hidden sm:inline">Each player can only have one movement arrow per step. Save each sequence to build complex multi-step plays for comprehensive team analysis.</span><span className="sm:hidden">One arrow per player/ball per step. Save plays for later replay.</span>
           </p>
         </div>
       </div>

@@ -318,30 +318,66 @@ const VolleyballPlayRecorder = () => {
   };
 
   const sharePlay = (play) => {
-    const playData = JSON.stringify(play);
-    const encoded = btoa(playData);
-    const shareCode = encoded.slice(0, 8).toUpperCase();
-    
-    sessionStorage.setItem(`play_${shareCode}`, playData);
-    
-    setShareCode(shareCode);
-    setShowShareCodeDialog(true);
-    setShareDialogPlay(null);
+    try {
+      const playData = JSON.stringify(play);
+      const encoded = btoa(unescape(encodeURIComponent(playData)));
+      const shareCode = encoded.slice(0, 12).toUpperCase();
+      
+      // Store locally as backup
+      sessionStorage.setItem(`play_${shareCode}`, playData);
+      
+      // Create shareable URL
+      const currentUrl = window.location.origin + window.location.pathname;
+      const shareUrl = `${currentUrl}?play=${encoded}`;
+      
+      setShareCode(shareUrl);
+      setShowShareCodeDialog(true);
+      setShareDialogPlay(null);
+    } catch (error) {
+      console.error('Error sharing play:', error);
+      alert('Error creating share link. Play data might be too large.');
+    }
   };
 
   const loadPlayFromCode = () => {
     setLoadCodeError('');
     if (!loadCode.trim()) {
-      setLoadCodeError('Please enter a share code');
+      setLoadCodeError('Please enter a share URL or code');
       return;
     }
 
     try {
-      const cleanCode = loadCode.trim().toUpperCase();
-      const playData = sessionStorage.getItem(`play_${cleanCode}`);
+      let playData = null;
+      const cleanCode = loadCode.trim();
+      
+      // Try to parse as URL first
+      if (cleanCode.includes('?play=')) {
+        const url = new URL(cleanCode);
+        const encodedPlay = url.searchParams.get('play');
+        if (encodedPlay) {
+          const decodedData = decodeURIComponent(escape(atob(encodedPlay)));
+          playData = decodedData;
+        }
+      }
+      // Try as short code (fallback for local storage)
+      else if (cleanCode.length <= 12) {
+        const upperCode = cleanCode.toUpperCase();
+        playData = sessionStorage.getItem(`play_${upperCode}`);
+      }
+      // Try as direct base64 encoded data
+      else {
+        try {
+          const decodedData = decodeURIComponent(escape(atob(cleanCode)));
+          playData = decodedData;
+        } catch (e) {
+          // If base64 decode fails, treat as short code
+          const upperCode = cleanCode.toUpperCase();
+          playData = sessionStorage.getItem(`play_${upperCode}`);
+        }
+      }
       
       if (!playData) {
-        setLoadCodeError('Share code not found. Make sure the code is correct.');
+        setLoadCodeError('Share URL/code not found. Make sure you copied the complete link or code.');
         return;
       }
 
@@ -353,13 +389,14 @@ const VolleyballPlayRecorder = () => {
       
       alert(`Successfully loaded "${play.name}"!`);
     } catch (error) {
-      setLoadCodeError('Invalid share code format');
+      console.error('Load error:', error);
+      setLoadCodeError('Invalid share URL or code format');
     }
   };
 
   const copyShareCode = () => {
     navigator.clipboard.writeText(shareCode).then(() => {
-      alert('Share code copied to clipboard!');
+      alert('Share URL copied to clipboard!');
     }).catch(() => {
       const textArea = document.createElement('textarea');
       textArea.value = shareCode;
@@ -367,7 +404,7 @@ const VolleyballPlayRecorder = () => {
       textArea.select();
       document.execCommand('copy');
       document.body.removeChild(textArea);
-      alert('Share code copied to clipboard!');
+      alert('Share URL copied to clipboard!');
     });
   };
 
@@ -533,8 +570,7 @@ const VolleyballPlayRecorder = () => {
               className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 lg:px-5 py-2 sm:py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-emerald-500/25 disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed disabled:hover:shadow-none disabled:transform-none transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
             >
               <Save size={14} className="sm:w-4 sm:h-4" />
-              <span className="hidden lg:inline">Save Step ({movementArrows.length})</span>
-              <span className="lg:hidden">Save ({movementArrows.length})</span>
+              Save Step
             </button>
             
             <button
@@ -562,8 +598,7 @@ const VolleyballPlayRecorder = () => {
             className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 lg:px-6 py-2 sm:py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-blue-500/25 transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
           >
             <Play size={14} className="sm:w-4 sm:h-4" />
-            <span className="hidden lg:inline">Replay ({recordedSteps.length} steps)</span>
-            <span className="lg:hidden">Replay ({recordedSteps.length})</span>
+            Replay
           </button>
         )}
         
@@ -627,9 +662,9 @@ const VolleyballPlayRecorder = () => {
         )}
       </div>
 
-      {/* Save Dialog */}
+      {/* Save Dialog - Same layer as drawer */}
       {showSaveDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-gradient-to-br from-slate-800 to-gray-900 rounded-2xl border border-slate-700 shadow-2xl p-6 w-full max-w-md">
             <h3 className="text-xl font-bold text-white mb-4 text-center">Save Your Play</h3>
             <p className="text-gray-300 text-sm mb-4 text-center">
@@ -674,73 +709,72 @@ const VolleyballPlayRecorder = () => {
         </div>
       )}
 
-      {/* Share Code Dialog - Higher z-index to be in front of drawer */}
+      {/* Share Code Dialog - Same layer as drawer for mobile */}
       {showShareCodeDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4">
-          <div className="bg-gradient-to-br from-slate-800 to-gray-900 rounded-2xl border border-slate-700 shadow-2xl p-6 w-full max-w-md">
-            <h3 className="text-xl font-bold text-white mb-4 text-center">Share Code Generated!</h3>
-            <div className="mb-4 p-4 bg-slate-700/30 rounded-lg border border-slate-600/30 text-center">
-              <p className="text-sm text-gray-400 mb-2">Share this code via text or email:</p>
-              <div className="text-3xl font-mono font-bold text-emerald-400 tracking-wider bg-slate-800/50 py-3 px-4 rounded-lg border">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-br from-slate-800 to-gray-900 rounded-2xl border border-slate-700 shadow-2xl p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg sm:text-xl font-bold text-white mb-3 sm:mb-4 text-center">Share URL Generated!</h3>
+            <div className="mb-3 sm:mb-4 p-3 sm:p-4 bg-slate-700/30 rounded-lg border border-slate-600/30">
+              <p className="text-xs sm:text-sm text-gray-400 mb-2">Share this URL via text, email, or social media:</p>
+              <div className="text-xs sm:text-sm font-mono text-emerald-400 bg-slate-800/50 py-2 sm:py-3 px-3 sm:px-4 rounded-lg border break-all">
                 {shareCode}
               </div>
             </div>
-            <p className="text-gray-300 text-sm mb-4 text-center">
-              Anyone with this code can load your play by clicking "Load Code" and entering it.
+            <p className="text-xs text-gray-300 mb-3 sm:mb-4 text-center">
+              Anyone with this URL can click it to instantly load your play. Works across all devices and browsers!
             </p>
-            <div className="flex gap-3">
+            <div className="flex gap-2 sm:gap-3">
               <button
                 onClick={() => setShowShareCodeDialog(false)}
-                className="flex-1 px-4 py-3 bg-slate-600/50 hover:bg-slate-600/70 text-white rounded-lg transition-colors"
+                className="flex-1 px-3 sm:px-4 py-2 sm:py-3 bg-slate-600/50 hover:bg-slate-600/70 text-white rounded-lg transition-colors text-sm sm:text-base"
               >
                 Close
               </button>
               <button
                 onClick={copyShareCode}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-lg font-semibold transition-all"
+                className="flex-1 flex items-center justify-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 sm:py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-lg font-semibold transition-all text-sm sm:text-base"
               >
-                📋 Copy Code
+                📋 Copy URL
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Load Code Dialog - Same layer as drawer */}
+      {/* Load Code Dialog - Same layer as drawer with mobile optimization */}
       {showLoadCodeDialog && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-gradient-to-br from-slate-800 to-gray-900 rounded-2xl border border-slate-700 shadow-2xl p-6 w-full max-w-md">
-            <h3 className="text-xl font-bold text-white mb-4 text-center">Load Shared Play</h3>
-            <p className="text-gray-300 text-sm mb-4 text-center">
-              Enter the share code you received to load a play
+          <div className="bg-gradient-to-br from-slate-800 to-gray-900 rounded-2xl border border-slate-700 shadow-2xl p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg sm:text-xl font-bold text-white mb-3 sm:mb-4 text-center">Load Shared Play</h3>
+            <p className="text-gray-300 text-xs sm:text-sm mb-3 sm:mb-4 text-center">
+              Enter a share URL (from social media/text) or paste it directly to load a play
             </p>
             <input
               type="text"
               value={loadCode}
-              onChange={(e) => setLoadCode(e.target.value.toUpperCase())}
-              placeholder="Enter 8-character code (e.g., ABC12345)"
-              className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none mb-3 text-center font-mono text-lg tracking-wider"
+              onChange={(e) => setLoadCode(e.target.value)}
+              placeholder="Paste share URL or enter code here..."
+              className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none mb-3 text-xs sm:text-sm"
               autoFocus
-              maxLength="8"
             />
             {loadCodeError && (
-              <p className="text-red-400 text-sm mb-3 text-center">{loadCodeError}</p>
+              <p className="text-red-400 text-xs sm:text-sm mb-3 text-center">{loadCodeError}</p>
             )}
-            <div className="flex gap-3">
+            <div className="flex gap-2 sm:gap-3">
               <button
                 onClick={() => {
                   setShowLoadCodeDialog(false);
                   setLoadCode('');
                   setLoadCodeError('');
                 }}
-                className="flex-1 px-4 py-3 bg-slate-600/50 hover:bg-slate-600/70 text-white rounded-lg transition-colors"
+                className="flex-1 px-3 sm:px-4 py-2 sm:py-3 bg-slate-600/50 hover:bg-slate-600/70 text-white rounded-lg transition-colors text-sm sm:text-base"
               >
                 Cancel
               </button>
               <button
                 onClick={loadPlayFromCode}
                 disabled={!loadCode.trim()}
-                className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-lg font-semibold disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed transition-all"
+                className="flex-1 px-3 sm:px-4 py-2 sm:py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-lg font-semibold disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed transition-all text-sm sm:text-base"
               >
                 Load Play
               </button>
@@ -762,7 +796,7 @@ const VolleyballPlayRecorder = () => {
               )}
             </div>
             <p className="text-gray-300 text-sm mb-4 text-center">
-              Generate a share code that others can use to load this play on their device.
+              Generate a share URL that others can use to load this play on any device.
             </p>
             <div className="flex gap-3">
               <button
@@ -776,7 +810,7 @@ const VolleyballPlayRecorder = () => {
                 className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-lg font-semibold transition-all"
               >
                 <Share2 size={16} />
-                Generate Code
+                Generate URL
               </button>
             </div>
           </div>
@@ -917,7 +951,7 @@ const VolleyballPlayRecorder = () => {
             className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white rounded-lg font-semibold shadow-lg hover:shadow-cyan-500/25 transform hover:scale-105 transition-all duration-200"
           >
             <Download size={16} />
-            Load Play from Code
+            Load Play from URL
           </button>
         </div>
         
@@ -1228,15 +1262,15 @@ const VolleyballPlayRecorder = () => {
             <h4 className="font-semibold text-green-400 mb-2 sm:mb-3 text-sm sm:text-base">Sharing System</h4>
             <ol className="list-decimal list-inside space-y-1 sm:space-y-2 text-xs sm:text-sm text-gray-300" start="5">
               <li><strong className="text-white">Save Steps:</strong> Build plays step by step with multiple movements</li>
-              <li><strong className="text-white">Generate Share Code:</strong> Create 8-character codes to share plays</li>
-              <li><strong className="text-white">Load Shared Plays:</strong> Enter codes from others to view their plays</li>
+              <li><strong className="text-white">Generate Share URL:</strong> Create shareable links to send plays</li>
+              <li><strong className="text-white">Load Shared Plays:</strong> Enter URLs from others to view their plays</li>
               <li><strong className="text-white">Professional Replay:</strong> Watch smooth animated playback anytime</li>
             </ol>
           </div>
         </div>
         <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-600">
           <p className="text-xs text-slate-400 text-center">
-            <strong className="text-slate-300">Share via Text:</strong> <span className="hidden sm:inline">Generate share codes and send them via text message or email. Recipients just click "Load Code" and enter the 8-character code to instantly view your play.</span><span className="sm:hidden">Generate codes to share plays via text. Recipients enter codes to load plays instantly.</span>
+            <strong className="text-slate-300">Share via URL:</strong> <span className="hidden sm:inline">Generate share URLs and send them via text message, email, or social media. Recipients just click the link to instantly view your play on any device.</span><span className="sm:hidden">Generate URLs to share plays via text. Recipients click links to load plays instantly.</span>
           </p>
         </div>
       </div>

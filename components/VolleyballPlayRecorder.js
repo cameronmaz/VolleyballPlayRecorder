@@ -750,18 +750,18 @@ const VolleyballPlayRecorder = () => {
     // Reset only positions, preserve names, colors, and numbers
     const resetHomePositions = [
       { x: 680, y: 750 },
-      { x: 680, y: 540 },
-      { x: 400, y: 540 },
-      { x: 120, y: 540 },
+      { x: 680, y: 560 },
+      { x: 400, y: 560 },
+      { x: 120, y: 560 },
       { x: 120, y: 750 },
       { x: 400, y: 750 }
     ];
     
     const resetAwayPositions = [
       { x: 120, y: 210 },
-      { x: 120, y: 420 },
-      { x: 400, y: 420 },
-      { x: 680, y: 420 },
+      { x: 120, y: 400 },
+      { x: 400, y: 400 },
+      { x: 680, y: 400 },
       { x: 680, y: 210 },
       { x: 400, y: 210 }
     ];

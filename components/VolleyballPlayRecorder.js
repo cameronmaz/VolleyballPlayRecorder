@@ -2079,36 +2079,6 @@ const VolleyballPlayRecorder = () => {
           </div>
         </div>
       </div>
-
-      <div className="mt-4 sm:mt-6 lg:mt-8 p-3 sm:p-4 lg:p-6 bg-gradient-to-br from-slate-800 to-gray-900 rounded-xl sm:rounded-2xl border border-slate-700 shadow-2xl">
-        <h3 className="font-bold text-lg sm:text-xl text-white mb-3 sm:mb-4 text-center">How to Customize Your Team</h3>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
-          <div>
-            <h4 className="font-semibold text-blue-400 mb-2 sm:mb-3 text-sm sm:text-base">Player Management</h4>
-            <ol className="list-decimal list-inside space-y-1 sm:space-y-2 text-xs sm:text-sm text-gray-300">
-              <li><strong className="text-white">Edit Players:</strong> Click the edit icon in the Players drawer to modify both name and number</li>
-              <li><strong className="text-white">Player Numbers:</strong> Set custom jersey numbers up to 3 characters (e.g., "10", "A", "L1")</li>
-              <li><strong className="text-white">Change Colors:</strong> Click the palette icon to choose custom colors for each player</li>
-              <li><strong className="text-white">Position Players:</strong> Drag players on the court to set their starting positions</li>
-            </ol>
-          </div>
-          <div>
-            <h4 className="font-semibold text-green-400 mb-2 sm:mb-3 text-sm sm:text-base">Team Management</h4>
-            <ol className="list-decimal list-inside space-y-1 sm:space-y-2 text-xs sm:text-sm text-gray-300" start="5">
-              <li><strong className="text-white">Save Teams:</strong> Save your current roster and player setup for future use</li>
-              <li><strong className="text-white">Load Teams:</strong> Use the dropdown to quickly switch between saved team configurations</li>
-              <li><strong className="text-white">Quick Reset:</strong> Use "Reset Numbers" and "Reset Colors" for easy team-wide changes</li>
-              <li><strong className="text-white">Visual Organization:</strong> Color-code players by position for clearer play visualization</li>
-            </ol>
-          </div>
-        </div>
-        <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-600">
-          <p className="text-xs text-slate-400 text-center">
-            <strong className="text-slate-300">Pro Tip:</strong> <span className="hidden sm:inline">Use the team management section at the top of the Players drawer to save your roster configurations. This lets you quickly switch between different teams or game scenarios while preserving your custom player names, numbers, and colors.</span><span className="sm:hidden">Save team configurations at the top of Players drawer to quickly switch between rosters.</span>
-          </p>
-        </div>
-      </div>
-    </div>
   );
 };
 

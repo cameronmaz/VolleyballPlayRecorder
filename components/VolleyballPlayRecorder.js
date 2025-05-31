@@ -4,18 +4,18 @@ import { RotateCcw, Edit3, Check, X, Palette, Save, Trash2, Play, Square, Chevro
 const VolleyballPlayRecorder = () => {
   const [homeTeam, setHomeTeam] = useState([
     { id: 1, x: 680, y: 750, position: '1', name: 'Player 1', color: '#3B82F6' },
-    { id: 2, x: 680, y: 540, position: '2', name: 'Player 2', color: '#3B82F6' },
-    { id: 3, x: 400, y: 540, position: '3', name: 'Player 3', color: '#3B82F6' },
-    { id: 4, x: 120, y: 540, position: '4', name: 'Player 4', color: '#3B82F6' },
+    { id: 2, x: 680, y: 550, position: '2', name: 'Player 2', color: '#3B82F6' },
+    { id: 3, x: 400, y: 550, position: '3', name: 'Player 3', color: '#3B82F6' },
+    { id: 4, x: 120, y: 550, position: '4', name: 'Player 4', color: '#3B82F6' },
     { id: 5, x: 120, y: 750, position: '5', name: 'Player 5', color: '#3B82F6' },
     { id: 6, x: 400, y: 750, position: '6', name: 'Player 6', color: '#3B82F6' }
   ]);
 
   const [awayTeam, setAwayTeam] = useState([
     { id: 7, x: 120, y: 210, position: '1', name: 'Player 1', color: '#EF4444' },
-    { id: 8, x: 120, y: 420, position: '2', name: 'Player 2', color: '#EF4444' },
-    { id: 9, x: 400, y: 420, position: '3', name: 'Player 3', color: '#EF4444' },
-    { id: 10, x: 680, y: 420, position: '4', name: 'Player 4', color: '#EF4444' },
+    { id: 8, x: 120, y: 410, position: '2', name: 'Player 2', color: '#EF4444' },
+    { id: 9, x: 400, y: 410, position: '3', name: 'Player 3', color: '#EF4444' },
+    { id: 10, x: 680, y: 410, position: '4', name: 'Player 4', color: '#EF4444' },
     { id: 11, x: 680, y: 210, position: '5', name: 'Player 5', color: '#EF4444' },
     { id: 12, x: 400, y: 210, position: '6', name: 'Player 6', color: '#EF4444' }
   ]);

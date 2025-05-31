@@ -67,52 +67,9 @@ const VolleyballPlayRecorder = () => {
   const courtHeight = 960;
 
   // Load saved teams from memory on component mount
-  useEffect(() => {
-    const sampleTeams = [
-      {
-        id: 'team-1',
-        name: 'Eagles Varsity',
-        homeTeam: [
-          { id: 1, x: 680, y: 750, position: '12', name: 'Sarah Johnson', color: '#3B82F6' },
-          { id: 2, x: 680, y: 540, position: '7', name: 'Mike Chen', color: '#3B82F6' },
-          { id: 3, x: 400, y: 540, position: '15', name: 'Emma Wilson', color: '#3B82F6' },
-          { id: 4, x: 120, y: 540, position: '9', name: 'Alex Rodriguez', color: '#3B82F6' },
-          { id: 5, x: 120, y: 750, position: '3', name: 'Taylor Kim', color: '#3B82F6' },
-          { id: 6, x: 400, y: 750, position: '21', name: 'Jordan Davis', color: '#3B82F6' }
-        ],
-        awayTeam: [
-          { id: 7, x: 120, y: 210, position: '8', name: 'Lightning Team', color: '#EF4444' },
-          { id: 8, x: 120, y: 420, position: '14', name: 'Player 2', color: '#EF4444' },
-          { id: 9, x: 400, y: 420, position: '6', name: 'Player 3', color: '#EF4444' },
-          { id: 10, x: 680, y: 420, position: '11', name: 'Player 4', color: '#EF4444' },
-          { id: 11, x: 680, y: 210, position: '2', name: 'Player 5', color: '#EF4444' },
-          { id: 12, x: 400, y: 210, position: '18', name: 'Player 6', color: '#EF4444' }
-        ],
-        createdAt: '2025-05-15 9:30 AM'
-      },
-      {
-        id: 'team-2',
-        name: 'Hawks JV Squad',
-        homeTeam: [
-          { id: 1, x: 680, y: 750, position: '4', name: 'Casey Brown', color: '#10B981' },
-          { id: 2, x: 680, y: 540, position: '13', name: 'Riley Martinez', color: '#10B981' },
-          { id: 3, x: 400, y: 540, position: '1', name: 'Morgan Lee', color: '#10B981' },
-          { id: 4, x: 120, y: 540, position: '19', name: 'Avery Thompson', color: '#10B981' },
-          { id: 5, x: 120, y: 750, position: '5', name: 'Dakota Singh', color: '#10B981' },
-          { id: 6, x: 400, y: 750, position: '16', name: 'Phoenix Garcia', color: '#10B981' }
-        ],
-        awayTeam: [
-          { id: 7, x: 120, y: 210, position: '10', name: 'Thunder Squad', color: '#F59E0B' },
-          { id: 8, x: 120, y: 420, position: '22', name: 'Player 2', color: '#F59E0B' },
-          { id: 9, x: 400, y: 420, position: '7', name: 'Player 3', color: '#F59E0B' },
-          { id: 10, x: 680, y: 420, position: '17', name: 'Player 4', color: '#F59E0B' },
-          { id: 11, x: 680, y: 210, position: '4', name: 'Player 5', color: '#F59E0B' },
-          { id: 12, x: 400, y: 210, position: '12', name: 'Player 6', color: '#F59E0B' }
-        ],
-        createdAt: '2025-05-20 2:15 PM'
-      }
-    ];
-    setSavedTeams(sampleTeams);
+   useEffect(() => {
+    // Start with empty teams array - users will create their own
+    setSavedTeams([]);
   }, []);
 
   const loadTeam = (team) => {

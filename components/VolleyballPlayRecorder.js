@@ -2079,7 +2079,6 @@ const VolleyballPlayRecorder = () => {
           </div>
         </div>
       </div>
-  );
 };
 
 export default VolleyballPlayRecorder;

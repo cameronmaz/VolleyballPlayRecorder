@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RotateCcw, Edit3, Check, X, Palette, Save, Trash2, Play, Square } from 'lucide-react';
+import { RotateCcw, Edit3, Check, X, Palette, Save, Trash2, Play, Square, ChevronDown } from 'lucide-react';
 
 const VolleyballPlayRecorder = () => {
   const [homeTeam, setHomeTeam] = useState([
@@ -50,6 +50,13 @@ const VolleyballPlayRecorder = () => {
   const [applyToWholeTeam, setApplyToWholeTeam] = useState(false);
   const [resetHoldTimeout, setResetHoldTimeout] = useState(null);
   const [showResetOptions, setShowResetOptions] = useState({ home: false, away: false });
+  const [savedTeams, setSavedTeams] = useState([]);
+  const [showSaveTeamDialog, setShowSaveTeamDialog] = useState(false);
+  const [teamName, setTeamName] = useState('');
+  const [showTeamDropdown, setShowTeamDropdown] = useState(false);
+  const [currentTeamName, setCurrentTeamName] = useState('');
+  const [showOverrideDialog, setShowOverrideDialog] = useState(false);
+  const [pendingTeamSave, setPendingTeamSave] = useState(null);
 
   const presetColors = [
     '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899',
@@ -58,6 +65,131 @@ const VolleyballPlayRecorder = () => {
 
   const courtWidth = 800;
   const courtHeight = 960;
+
+  // Load saved teams from memory on component mount
+  useEffect(() => {
+    const sampleTeams = [
+      {
+        id: 'team-1',
+        name: 'Eagles Varsity',
+        homeTeam: [
+          { id: 1, x: 680, y: 750, position: '12', name: 'Sarah Johnson', color: '#3B82F6' },
+          { id: 2, x: 680, y: 540, position: '7', name: 'Mike Chen', color: '#3B82F6' },
+          { id: 3, x: 400, y: 540, position: '15', name: 'Emma Wilson', color: '#3B82F6' },
+          { id: 4, x: 120, y: 540, position: '9', name: 'Alex Rodriguez', color: '#3B82F6' },
+          { id: 5, x: 120, y: 750, position: '3', name: 'Taylor Kim', color: '#3B82F6' },
+          { id: 6, x: 400, y: 750, position: '21', name: 'Jordan Davis', color: '#3B82F6' }
+        ],
+        awayTeam: [
+          { id: 7, x: 120, y: 210, position: '8', name: 'Lightning Team', color: '#EF4444' },
+          { id: 8, x: 120, y: 420, position: '14', name: 'Player 2', color: '#EF4444' },
+          { id: 9, x: 400, y: 420, position: '6', name: 'Player 3', color: '#EF4444' },
+          { id: 10, x: 680, y: 420, position: '11', name: 'Player 4', color: '#EF4444' },
+          { id: 11, x: 680, y: 210, position: '2', name: 'Player 5', color: '#EF4444' },
+          { id: 12, x: 400, y: 210, position: '18', name: 'Player 6', color: '#EF4444' }
+        ],
+        createdAt: '2025-05-15 9:30 AM'
+      },
+      {
+        id: 'team-2',
+        name: 'Hawks JV Squad',
+        homeTeam: [
+          { id: 1, x: 680, y: 750, position: '4', name: 'Casey Brown', color: '#10B981' },
+          { id: 2, x: 680, y: 540, position: '13', name: 'Riley Martinez', color: '#10B981' },
+          { id: 3, x: 400, y: 540, position: '1', name: 'Morgan Lee', color: '#10B981' },
+          { id: 4, x: 120, y: 540, position: '19', name: 'Avery Thompson', color: '#10B981' },
+          { id: 5, x: 120, y: 750, position: '5', name: 'Dakota Singh', color: '#10B981' },
+          { id: 6, x: 400, y: 750, position: '16', name: 'Phoenix Garcia', color: '#10B981' }
+        ],
+        awayTeam: [
+          { id: 7, x: 120, y: 210, position: '10', name: 'Thunder Squad', color: '#F59E0B' },
+          { id: 8, x: 120, y: 420, position: '22', name: 'Player 2', color: '#F59E0B' },
+          { id: 9, x: 400, y: 420, position: '7', name: 'Player 3', color: '#F59E0B' },
+          { id: 10, x: 680, y: 420, position: '17', name: 'Player 4', color: '#F59E0B' },
+          { id: 11, x: 680, y: 210, position: '4', name: 'Player 5', color: '#F59E0B' },
+          { id: 12, x: 400, y: 210, position: '12', name: 'Player 6', color: '#F59E0B' }
+        ],
+        createdAt: '2025-05-20 2:15 PM'
+      }
+    ];
+    setSavedTeams(sampleTeams);
+  }, []);
+
+  const loadTeam = (team) => {
+    setHomeTeam([...team.homeTeam]);
+    setAwayTeam([...team.awayTeam]);
+    setCurrentTeamName(team.name);
+    setShowTeamDropdown(false);
+  };
+
+  const deleteTeam = (teamId) => {
+    const teamToDelete = savedTeams.find(team => team.id === teamId);
+    setSavedTeams(prev => prev.filter(team => team.id !== teamId));
+    
+    // If we're deleting the currently loaded team, clear the current team name
+    if (teamToDelete && teamToDelete.name === currentTeamName) {
+      setCurrentTeamName('');
+    }
+  };
+
+  const saveCurrentTeam = () => {
+    if (!teamName.trim()) return;
+    
+    const trimmedName = teamName.trim();
+    const existingTeam = savedTeams.find(team => team.name.toLowerCase() === trimmedName.toLowerCase());
+    
+    if (existingTeam) {
+      // If team with this name exists, show override dialog
+      setPendingTeamSave({
+        name: trimmedName,
+        homeTeam: [...homeTeam],
+        awayTeam: [...awayTeam]
+      });
+      setShowOverrideDialog(true);
+      return;
+    }
+    
+    // Save new team or update existing
+    const team = {
+      id: Date.now(),
+      name: trimmedName,
+      homeTeam: [...homeTeam],
+      awayTeam: [...awayTeam],
+      createdAt: new Date().toLocaleString()
+    };
+    
+    setSavedTeams(prev => [...prev, team]);
+    setCurrentTeamName(trimmedName);
+    setTeamName('');
+    setShowSaveTeamDialog(false);
+  };
+
+  const handleOverrideTeam = () => {
+    if (!pendingTeamSave) return;
+    
+    // Remove existing team with same name and add new one
+    setSavedTeams(prev => {
+      const filtered = prev.filter(team => team.name.toLowerCase() !== pendingTeamSave.name.toLowerCase());
+      return [...filtered, {
+        id: Date.now(),
+        name: pendingTeamSave.name,
+        homeTeam: [...pendingTeamSave.homeTeam],
+        awayTeam: [...pendingTeamSave.awayTeam],
+        createdAt: new Date().toLocaleString()
+      }];
+    });
+    
+    setCurrentTeamName(pendingTeamSave.name);
+    setTeamName('');
+    setShowSaveTeamDialog(false);
+    setShowOverrideDialog(false);
+    setPendingTeamSave(null);
+  };
+
+  const cancelOverride = () => {
+    setShowOverrideDialog(false);
+    setPendingTeamSave(null);
+  };
 
   const startEditingPlayer = (player, team) => {
     setEditingPlayer({ ...player, team });
@@ -248,6 +380,24 @@ const VolleyballPlayRecorder = () => {
     }
   };
 
+  const handleResetTouchStart = (team) => {
+    const timeout = setTimeout(() => {
+      setShowResetOptions(prev => ({ ...prev, [team]: true }));
+    }, 800);
+    setResetHoldTimeout(timeout);
+  };
+
+  const handleResetTouchEnd = (team) => {
+    if (resetHoldTimeout) {
+      clearTimeout(resetHoldTimeout);
+      setResetHoldTimeout(null);
+      
+      if (!showResetOptions[team]) {
+        resetTeamBoth(team);
+      }
+    }
+  };
+
   const handleResetOptionSelect = (team, option) => {
     if (option === 'colors') {
       resetTeamColors(team);
@@ -291,8 +441,24 @@ const VolleyballPlayRecorder = () => {
         screenY: clientY - rect.top
       });
     } else {
-      // For dragging, we don't need offset calculation since we'll use the mouse position directly
-      setDraggedItem({ ...item, type });
+      // For dragging, calculate screen-space offset (before scaling)
+      const scaleX = courtWidth / rect.width;
+      const scaleY = courtHeight / rect.height;
+      
+      // Convert item position to screen coordinates
+      const itemScreenX = item.x / scaleX;
+      const itemScreenY = item.y / scaleY;
+      
+      // Calculate screen-space offset
+      const screenOffsetX = (clientX - rect.left) - itemScreenX;
+      const screenOffsetY = (clientY - rect.top) - itemScreenY;
+      
+      setDraggedItem({ 
+        ...item, 
+        type,
+        screenOffsetX,
+        screenOffsetY
+      });
     }
   };
 
@@ -307,36 +473,48 @@ const VolleyballPlayRecorder = () => {
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     
-    const svgX = clientX - rect.left;
-    const svgY = clientY - rect.top;
-    
     const scaleX = courtWidth / rect.width;
     const scaleY = courtHeight / rect.height;
     
-    const scaledX = svgX * scaleX;
-    const scaledY = svgY * scaleY;
-    
-    let constrainedX = Math.max(30, Math.min(courtWidth - 30, scaledX));
-    let constrainedY = Math.max(30, Math.min(courtHeight - 30, scaledY));
-    
-    // Apply team-specific constraints
-    if (draggedItem || (isRecording && isCreatingArrow && arrowStart)) {
-      const itemType = draggedItem?.type || arrowStart?.type;
-      if (itemType === 'home') {
+    if (isRecording && isCreatingArrow && arrowStart) {
+      const svgX = (clientX - rect.left) * scaleX;
+      const svgY = (clientY - rect.top) * scaleY;
+      
+      let constrainedX = Math.max(30, Math.min(courtWidth - 30, svgX));
+      let constrainedY = Math.max(30, Math.min(courtHeight - 30, svgY));
+      
+      // Apply team-specific constraints for arrows
+      if (arrowStart.type === 'home') {
         constrainedY = Math.max(courtHeight/2 + 20, constrainedY);
-      } else if (itemType === 'away') {
+      } else if (arrowStart.type === 'away') {
         constrainedY = Math.min(courtHeight/2 - 20, constrainedY);
       }
-    }
-    
-    if (isRecording && isCreatingArrow && arrowStart) {
+      
       setCurrentArrow({
         ...arrowStart,
         endX: constrainedX,
         endY: constrainedY
       });
     } else if (!isRecording && draggedItem) {
-      // Direct position update for smoother dragging
+      // Calculate new position using screen-space offset
+      const adjustedScreenX = (clientX - rect.left) - draggedItem.screenOffsetX;
+      const adjustedScreenY = (clientY - rect.top) - draggedItem.screenOffsetY;
+      
+      // Convert back to SVG coordinates
+      const newX = adjustedScreenX * scaleX;
+      const newY = adjustedScreenY * scaleY;
+      
+      // Apply constraints
+      let constrainedX = Math.max(30, Math.min(courtWidth - 30, newX));
+      let constrainedY = Math.max(30, Math.min(courtHeight - 30, newY));
+      
+      // Apply team-specific constraints for dragging
+      if (draggedItem.type === 'home') {
+        constrainedY = Math.max(courtHeight/2 + 20, constrainedY);
+      } else if (draggedItem.type === 'away') {
+        constrainedY = Math.min(courtHeight/2 - 20, constrainedY);
+      }
+
       if (draggedItem.type === 'home') {
         setHomeTeam(prev => prev.map(player => 
           player.id === draggedItem.id ? { ...player, x: constrainedX, y: constrainedY } : player
@@ -609,31 +787,46 @@ const VolleyballPlayRecorder = () => {
     setRecordedSteps([]);
     setMovementArrows([]);
     setCurrentPlay(null);
+    // Don't reset currentTeamName - keep team context
     setBall({ x: 400, y: 480, visible: true });
     
-    const defaultHome = [
-      { id: 1, x: 680, y: 750, position: '1', name: 'Player 1', color: '#3B82F6' },
-      { id: 2, x: 680, y: 540, position: '2', name: 'Player 2', color: '#3B82F6' },
-      { id: 3, x: 400, y: 540, position: '3', name: 'Player 3', color: '#3B82F6' },
-      { id: 4, x: 120, y: 540, position: '4', name: 'Player 4', color: '#3B82F6' },
-      { id: 5, x: 120, y: 750, position: '5', name: 'Player 5', color: '#3B82F6' },
-      { id: 6, x: 400, y: 750, position: '6', name: 'Player 6', color: '#3B82F6' }
+    // Reset only positions, preserve names, colors, and numbers
+    const resetHomePositions = [
+      { x: 680, y: 750 },
+      { x: 680, y: 540 },
+      { x: 400, y: 540 },
+      { x: 120, y: 540 },
+      { x: 120, y: 750 },
+      { x: 400, y: 750 }
     ];
     
-    const defaultAway = [
-      { id: 7, x: 120, y: 210, position: '1', name: 'Player 1', color: '#EF4444' },
-      { id: 8, x: 120, y: 420, position: '2', name: 'Player 2', color: '#EF4444' },
-      { id: 9, x: 400, y: 420, position: '3', name: 'Player 3', color: '#EF4444' },
-      { id: 10, x: 680, y: 420, position: '4', name: 'Player 4', color: '#EF4444' },
-      { id: 11, x: 680, y: 210, position: '5', name: 'Player 5', color: '#EF4444' },
-      { id: 12, x: 400, y: 210, position: '6', name: 'Player 6', color: '#EF4444' }
+    const resetAwayPositions = [
+      { x: 120, y: 210 },
+      { x: 120, y: 420 },
+      { x: 400, y: 420 },
+      { x: 680, y: 420 },
+      { x: 680, y: 210 },
+      { x: 400, y: 210 }
     ];
     
-    setHomeTeam(defaultHome);
-    setAwayTeam(defaultAway);
+    // Update teams with reset positions but keep existing player data
+    const updatedHomeTeam = homeTeam.map((player, index) => ({
+      ...player,
+      x: resetHomePositions[index].x,
+      y: resetHomePositions[index].y
+    }));
+    
+    const updatedAwayTeam = awayTeam.map((player, index) => ({
+      ...player,
+      x: resetAwayPositions[index].x,
+      y: resetAwayPositions[index].y
+    }));
+    
+    setHomeTeam(updatedHomeTeam);
+    setAwayTeam(updatedAwayTeam);
     setAnimationPositions({
-      homeTeam: defaultHome,
-      awayTeam: defaultAway,
+      homeTeam: updatedHomeTeam,
+      awayTeam: updatedAwayTeam,
       ball: { x: 400, y: 480, visible: true }
     });
   };
@@ -679,10 +872,10 @@ const VolleyballPlayRecorder = () => {
             <button
               onClick={saveStep}
               disabled={movementArrows.length === 0}
-              className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 lg:px-5 py-2 sm:py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-emerald-500/25 disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed disabled:hover:shadow-none disabled:transform-none transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
+              className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 lg:px-5 py-2 sm:py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-blue-500/25 disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed disabled:hover:shadow-none disabled:transform-none transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
             >
               <Save size={14} className="sm:w-4 sm:h-4" />
-              <span>Save ({movementArrows.length})</span>
+              <span>Save Step ({movementArrows.length})</span>
             </button>
             
             <button
@@ -719,10 +912,10 @@ const VolleyballPlayRecorder = () => {
             
             <button
               onClick={stopRecording}
-              className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 lg:px-6 py-2 sm:py-3 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-gray-500/25 transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
+              className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 lg:px-6 py-2 sm:py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-emerald-500/25 transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
             >
-              <Square size={12} fill="white" className="sm:w-3 sm:h-3" />
-              <span>Stop</span>
+              <Save size={12} className="sm:w-3 sm:h-3" />
+              <span>Save Play</span>
             </button>
           </>
         )}
@@ -850,14 +1043,14 @@ const VolleyballPlayRecorder = () => {
                 onClick={cancelSave}
                 className="flex-1 px-4 py-3 bg-slate-600/50 hover:bg-slate-600/70 text-white rounded-lg transition-colors"
               >
-                Don't Save
+                Cancel
               </button>
               <button
                 onClick={savePlay}
                 disabled={!playName.trim()}
-                className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-lg font-semibold disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed transition-all"
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-lg font-semibold disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed transition-all"
               >
-                Save Play
+                Save
               </button>
             </div>
           </div>
@@ -879,6 +1072,69 @@ const VolleyballPlayRecorder = () => {
         </div>
         
         <div className="p-6 overflow-y-auto h-full pb-24">
+          {/* Team Management Section at Top */}
+          <div className="mb-6 p-4 bg-slate-700/20 rounded-lg border border-slate-600/30">
+            <h4 className="text-sm font-semibold text-purple-400 mb-3 uppercase tracking-wide">Team Management</h4>
+            
+            {/* Save Current Team Button */}
+            <button
+              onClick={() => {
+                setTeamName(currentTeamName); // Pre-fill with current team name
+                setShowSaveTeamDialog(true);
+              }}
+              className="w-full mb-3 px-4 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-lg transition-colors font-semibold flex items-center justify-center gap-2"
+            >
+              <Save size={16} />
+              Save Current Team
+            </button>
+            
+            {/* Team Selection Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowTeamDropdown(!showTeamDropdown)}
+                className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white hover:bg-slate-700/70 transition-colors flex items-center justify-between"
+                disabled={savedTeams.length === 0}
+              >
+                <span className={savedTeams.length === 0 ? 'text-gray-400' : 'text-white'}>
+                  {savedTeams.length === 0 ? 'No saved teams' : 'Load Saved Team'}
+                </span>
+                <ChevronDown size={16} className={`transition-transform ${showTeamDropdown ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {showTeamDropdown && savedTeams.length > 0 && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowTeamDropdown(false)}
+                  />
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg z-50 max-h-48 overflow-y-auto">
+                    {savedTeams.map(team => (
+                      <div key={team.id} className="flex items-center hover:bg-slate-700/50 transition-colors">
+                        <button
+                          onClick={() => loadTeam(team)}
+                          className="flex-1 px-4 py-3 text-left text-white hover:text-blue-300 transition-colors"
+                        >
+                          <div className="font-medium">{team.name}</div>
+                          <div className="text-xs text-gray-400">{team.createdAt}</div>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteTeam(team.id);
+                          }}
+                          className="px-3 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/20 transition-colors"
+                          title="Delete team"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
           {/* Home Team */}
           <div className="mb-6">
             <div className="flex items-center justify-between mb-3">
@@ -888,6 +1144,8 @@ const VolleyballPlayRecorder = () => {
                   onMouseDown={() => handleResetMouseDown('home')}
                   onMouseUp={() => handleResetMouseUp('home')}
                   onMouseLeave={() => handleResetMouseLeave('home')}
+                  onTouchStart={() => handleResetTouchStart('home')}
+                  onTouchEnd={() => handleResetTouchEnd('home')}
                   className="text-xs text-blue-400 hover:text-blue-300 transition-colors px-2 py-1 rounded border border-blue-400/30 hover:border-blue-300/50"
                 >
                   Reset Team
@@ -1031,6 +1289,8 @@ const VolleyballPlayRecorder = () => {
                   onMouseDown={() => handleResetMouseDown('away')}
                   onMouseUp={() => handleResetMouseUp('away')}
                   onMouseLeave={() => handleResetMouseLeave('away')}
+                  onTouchStart={() => handleResetTouchStart('away')}
+                  onTouchEnd={() => handleResetTouchEnd('away')}
                   className="text-xs text-red-400 hover:text-red-300 transition-colors px-2 py-1 rounded border border-red-400/30 hover:border-red-300/50"
                 >
                   Reset Team
@@ -1165,29 +1425,104 @@ const VolleyballPlayRecorder = () => {
             ))}
           </div>
 
-          <div className="mt-6 pt-4 border-t border-slate-600 space-y-3">
+          <div className="mt-6 pt-4 border-t border-slate-600">
             <button
               onClick={() => {
                 const resetHome = homeTeam.map((player, index) => ({ 
                   ...player, 
                   name: `Player ${index + 1}`,
-                  position: (index + 1).toString()
+                  position: (index + 1).toString(),
+                  color: '#3B82F6'
                 }));
                 const resetAway = awayTeam.map((player, index) => ({ 
                   ...player, 
                   name: `Player ${index + 1}`,
-                  position: (index + 1).toString()
+                  position: (index + 1).toString(),
+                  color: '#EF4444'
                 }));
                 setHomeTeam(resetHome);
                 setAwayTeam(resetAway);
+                setCurrentTeamName(''); // Clear current team when doing full reset
               }}
-              className="w-full px-4 py-3 bg-slate-600/50 hover:bg-slate-600/70 text-white rounded-lg transition-colors"
+              className="w-full px-4 py-3 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-lg transition-colors font-semibold shadow-lg hover:shadow-red-500/25 transform hover:scale-[1.02] active:scale-[0.98] transition-all duration-200"
             >
-              Reset All Teams (Names & Numbers)
+              Reset All Teams
             </button>
           </div>
         </div>
       </div>
+
+      {/* Save Team Dialog */}
+      {showSaveTeamDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-br from-slate-800 to-gray-900 rounded-2xl border border-slate-700 shadow-2xl p-6 w-full max-w-md">
+            <h3 className="text-xl font-bold text-white mb-4 text-center">Save Team Setup</h3>
+            <p className="text-gray-300 text-sm mb-4 text-center">
+              {currentTeamName 
+                ? `You can update "${currentTeamName}" or save as a new team with a different name`
+                : 'Save your current player configuration to reuse with different opponents'
+              }
+            </p>
+            <input
+              type="text"
+              value={teamName}
+              onChange={(e) => setTeamName(e.target.value)}
+              placeholder="Enter team name (e.g., 'Eagles Varsity', 'JV Squad')"
+              className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none mb-4"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && teamName.trim()) saveCurrentTeam();
+                if (e.key === 'Escape') setShowSaveTeamDialog(false);
+              }}
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setTeamName('');
+                  setShowSaveTeamDialog(false);
+                }}
+                className="flex-1 px-4 py-3 bg-slate-600/50 hover:bg-slate-600/70 text-white rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveCurrentTeam}
+                disabled={!teamName.trim()}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-lg font-semibold disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed transition-all"
+              >
+                Save Team
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Override Team Dialog */}
+      {showOverrideDialog && pendingTeamSave && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-br from-slate-800 to-gray-900 rounded-2xl border border-slate-700 shadow-2xl p-6 w-full max-w-md">
+            <h3 className="text-xl font-bold text-white mb-4 text-center">Team Name Already Exists</h3>
+            <p className="text-gray-300 text-sm mb-6 text-center">
+              A team named "<span className="font-semibold text-white">{pendingTeamSave.name}</span>" already exists. 
+              Do you want to override it with your current team configuration?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={cancelOverride}
+                className="flex-1 px-4 py-3 bg-slate-600/50 hover:bg-slate-600/70 text-white rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleOverrideTeam}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white rounded-lg font-semibold transition-all"
+              >
+                Override Team
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Color Picker Modal */}
       {editingPlayerColor && (
@@ -1240,6 +1575,29 @@ const VolleyballPlayRecorder = () => {
                     document.addEventListener('mouseup', handleMouseUp);
                     handleMouseMove(e);
                   }}
+                  onTouchStart={(e) => {
+                    e.preventDefault();
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const handleTouchMove = (e) => {
+                      e.preventDefault();
+                      const touch = e.touches[0];
+                      const x = Math.max(0, Math.min(rect.width, touch.clientX - rect.left));
+                      const y = Math.max(0, Math.min(rect.height, touch.clientY - rect.top));
+                      const s = (x / rect.width) * 100;
+                      const v = 100 - (y / rect.height) * 100;
+                      setColorPickerState(prev => ({ ...prev, s, v }));
+                      updatePlayerColor(hsvToHex(colorPickerState.h, s, v));
+                    };
+                    
+                    const handleTouchEnd = () => {
+                      document.removeEventListener('touchmove', handleTouchMove);
+                      document.removeEventListener('touchend', handleTouchEnd);
+                    };
+                    
+                    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+                    document.addEventListener('touchend', handleTouchEnd);
+                    handleTouchMove(e);
+                  }}
                 >
                   <div 
                     className="absolute w-4 h-4 border-2 border-white rounded-full shadow-lg transform -translate-x-2 -translate-y-2 pointer-events-none"
@@ -1274,6 +1632,27 @@ const VolleyballPlayRecorder = () => {
                       document.addEventListener('mousemove', handleMouseMove);
                       document.addEventListener('mouseup', handleMouseUp);
                       handleMouseMove(e);
+                    }}
+                    onTouchStart={(e) => {
+                      e.preventDefault();
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const handleTouchMove = (e) => {
+                        e.preventDefault();
+                        const touch = e.touches[0];
+                        const x = Math.max(0, Math.min(rect.width, touch.clientX - rect.left));
+                        const h = (x / rect.width) * 360;
+                        setColorPickerState(prev => ({ ...prev, h }));
+                        updatePlayerColor(hsvToHex(h, colorPickerState.s, colorPickerState.v));
+                      };
+                      
+                      const handleTouchEnd = () => {
+                        document.removeEventListener('touchmove', handleTouchMove);
+                        document.removeEventListener('touchend', handleTouchEnd);
+                      };
+                      
+                      document.addEventListener('touchmove', handleTouchMove, { passive: false });
+                      document.addEventListener('touchend', handleTouchEnd);
+                      handleTouchMove(e);
                     }}
                   >
                     <div 
@@ -1445,6 +1824,7 @@ const VolleyballPlayRecorder = () => {
           onClick={() => {
             setShowPlayerDrawer(false);
             setShowPlaysDrawer(false);
+            setShowTeamDropdown(false);
           }}
         />
       )}
@@ -1471,7 +1851,8 @@ const VolleyballPlayRecorder = () => {
                 WebkitUserSelect: 'none',
                 KhtmlUserSelect: 'none',
                 MozUserSelect: 'none',
-                msUserSelect: 'none'
+                msUserSelect: 'none',
+                overflow: 'visible' // Ensure SVG content isn't clipped
               }}
             >
               <defs>
@@ -1482,7 +1863,7 @@ const VolleyballPlayRecorder = () => {
                 </linearGradient>
 
                 <g id="modernVolleyball">
-                  <circle cx="0" cy="0" r="18" fill="white" stroke="#000000" strokeWidth="3"/>
+                  <circle cx="0" cy="0" r="22" fill="white" stroke="#000000" strokeWidth="3"/>
                 </g>
 
                 <radialGradient id="ballGradient" cx="30%" cy="30%">
@@ -1539,7 +1920,7 @@ const VolleyballPlayRecorder = () => {
                     <circle
                       cx={arrow.endX}
                       cy={arrow.endY}
-                      r="18"
+                      r="22"
                       fill="white"
                       stroke="#000000"
                       strokeWidth="3"
@@ -1550,7 +1931,7 @@ const VolleyballPlayRecorder = () => {
                       <circle
                         cx={arrow.endX}
                         cy={arrow.endY}
-                        r="26"
+                        r="32"
                         fill={arrow.type === 'home' ? '#3b82f6' : '#ef4444'}
                         stroke="white"
                         strokeWidth="4"
@@ -1591,7 +1972,7 @@ const VolleyballPlayRecorder = () => {
                     <circle
                       cx={currentArrow.endX}
                       cy={currentArrow.endY}
-                      r="18"
+                      r="22"
                       fill="white"
                       stroke="#000000"
                       strokeWidth="3"
@@ -1602,7 +1983,7 @@ const VolleyballPlayRecorder = () => {
                       <circle
                         cx={currentArrow.endX}
                         cy={currentArrow.endY}
-                        r="26"
+                        r="32"
                         fill={currentArrow.type === 'home' ? '#3b82f6' : '#ef4444'}
                         stroke="white"
                         strokeWidth="4"
@@ -1633,14 +2014,14 @@ const VolleyballPlayRecorder = () => {
                   <circle
                     cx={player.x}
                     cy={player.y}
-                    r="35"
+                    r="40"
                     fill="transparent"
                     className="sm:hidden"
                   />
                   <circle
                     cx={player.x}
                     cy={player.y}
-                    r="26"
+                    r="32"
                     fill={`url(#playerGradient-${player.id})`}
                     stroke="white"
                     strokeWidth="4"
@@ -1680,14 +2061,14 @@ const VolleyballPlayRecorder = () => {
                   <circle
                     cx={player.x}
                     cy={player.y}
-                    r="35"
+                    r="40"
                     fill="transparent"
                     className="sm:hidden"
                   />
                   <circle
                     cx={player.x}
                     cy={player.y}
-                    r="26"
+                    r="32"
                     fill={`url(#playerGradient-${player.id})`}
                     stroke="white"
                     strokeWidth="4"
@@ -1726,7 +2107,7 @@ const VolleyballPlayRecorder = () => {
                   <circle
                     cx={displayPositions.ball.x}
                     cy={displayPositions.ball.y}
-                    r="30"
+                    r="35"
                     fill="transparent"
                     className="sm:hidden"
                   />
@@ -1755,18 +2136,18 @@ const VolleyballPlayRecorder = () => {
             </ol>
           </div>
           <div>
-            <h4 className="font-semibold text-green-400 mb-2 sm:mb-3 text-sm sm:text-base">Customization Features</h4>
+            <h4 className="font-semibold text-green-400 mb-2 sm:mb-3 text-sm sm:text-base">Team Management</h4>
             <ol className="list-decimal list-inside space-y-1 sm:space-y-2 text-xs sm:text-sm text-gray-300" start="5">
-              <li><strong className="text-white">Team Organization:</strong> Use actual jersey numbers and names from your team roster</li>
+              <li><strong className="text-white">Save Teams:</strong> Save your current roster and player setup for future use</li>
+              <li><strong className="text-white">Load Teams:</strong> Use the dropdown to quickly switch between saved team configurations</li>
               <li><strong className="text-white">Quick Reset:</strong> Use "Reset Numbers" and "Reset Colors" for easy team-wide changes</li>
-              <li><strong className="text-white">Position Roles:</strong> Color-code players by their roles (setter, hitter, libero, etc.)</li>
-              <li><strong className="text-white">Visual Clarity:</strong> Numbers appear on court circles and in the player list for easy identification</li>
+              <li><strong className="text-white">Visual Organization:</strong> Color-code players by position for clearer play visualization</li>
             </ol>
           </div>
         </div>
         <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-600">
           <p className="text-xs text-slate-400 text-center">
-            <strong className="text-slate-300">Pro Tip:</strong> <span className="hidden sm:inline">Open the Players drawer to edit both player names and numbers in one convenient location. Use actual jersey numbers and color-code by position for clearer play visualization and team organization.</span><span className="sm:hidden">Use the Players drawer to edit names and numbers. Color-code by position for better visualization.</span>
+            <strong className="text-slate-300">Pro Tip:</strong> <span className="hidden sm:inline">Use the team management section at the top of the Players drawer to save your roster configurations. This lets you quickly switch between different teams or game scenarios while preserving your custom player names, numbers, and colors.</span><span className="sm:hidden">Save team configurations at the top of Players drawer to quickly switch between rosters.</span>
           </p>
         </div>
       </div>

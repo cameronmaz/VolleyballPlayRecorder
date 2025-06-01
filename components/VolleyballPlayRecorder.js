@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RotateCcw, Edit3, Check, X, Palette, Save, Trash2, Play, Square, ChevronDown } from 'lucide-react';
+import { RotateCcw, Edit3, Check, X, Palette, Save, Trash2, Play, Square, ChevronDown, Home, Pen, ArrowRight, Type, Eraser, Circle } from 'lucide-react';
 
 const VolleyballPlayRecorder = () => {
   const [homeTeam, setHomeTeam] = useState([
@@ -28,6 +28,9 @@ const VolleyballPlayRecorder = () => {
   const [currentPlay, setCurrentPlay] = useState(null);
   const [isReplaying, setIsReplaying] = useState(false);
   const [replayProgress, setReplayProgress] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [replayPosition, setReplayPosition] = useState(0); // 0 to 1 representing full play progress
+  const [isDraggingScrubber, setIsDraggingScrubber] = useState(false);
   const [isCreatingArrow, setIsCreatingArrow] = useState(false);
   const [arrowStart, setArrowStart] = useState(null);
   const [currentArrow, setCurrentArrow] = useState(null);
@@ -58,6 +61,15 @@ const VolleyballPlayRecorder = () => {
   const [showOverrideDialog, setShowOverrideDialog] = useState(false);
   const [pendingTeamSave, setPendingTeamSave] = useState(null);
 
+  // Drawing/annotation states
+  const [isDrawingMode, setIsDrawingMode] = useState(false);
+  const [drawingTool, setDrawingTool] = useState('pen'); // pen, arrow, circle, text, eraser
+  const [drawingColor, setDrawingColor] = useState('#FF0000');
+  const [drawings, setDrawings] = useState([]);
+  const [currentDrawing, setCurrentDrawing] = useState(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [drawingStartPoint, setDrawingStartPoint] = useState(null);
+
   const presetColors = [
     '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899',
     '#06B6D4', '#84CC16', '#F97316', '#6366F1', '#14B8A6', '#F43F5E'
@@ -67,7 +79,7 @@ const VolleyballPlayRecorder = () => {
   const courtHeight = 960;
 
   // Load saved teams from memory on component mount
-   useEffect(() => {
+  useEffect(() => {
     // Start with empty teams array - users will create their own
     setSavedTeams([]);
   }, []);
@@ -366,7 +378,170 @@ const VolleyballPlayRecorder = () => {
     setShowResetOptions(prev => ({ ...prev, [team]: false }));
   };
 
+  const handleDrawingStart = (e) => {
+    if (!isDrawingMode) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const svg = e.currentTarget.closest('svg') || e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    const scaleX = courtWidth / rect.width;
+    const scaleY = courtHeight / rect.height;
+    
+    const svgX = (clientX - rect.left) * scaleX;
+    const svgY = (clientY - rect.top) * scaleY;
+    
+    setIsDrawing(true);
+    setDrawingStartPoint({ x: svgX, y: svgY });
+    
+    if (drawingTool === 'pen') {
+      setCurrentDrawing({
+        id: Date.now(),
+        type: 'pen',
+        color: drawingColor,
+        path: `M ${svgX} ${svgY}`,
+        strokeWidth: 3
+      });
+    } else if (drawingTool === 'eraser') {
+      // Find drawings at this point and remove them
+      const clickRadius = 25;
+      setDrawings(prev => prev.filter(drawing => {
+        if (drawing.type === 'pen') {
+          // For pen drawings, parse the path and check multiple points along it
+          const pathCommands = drawing.path.split(/[ML]/).filter(cmd => cmd.trim());
+          let foundNearPoint = false;
+          
+          for (const cmd of pathCommands) {
+            const coords = cmd.trim().split(/\s+/);
+            if (coords.length >= 2) {
+              const pathX = parseFloat(coords[0]);
+              const pathY = parseFloat(coords[1]);
+              if (!isNaN(pathX) && !isNaN(pathY)) {
+                const distance = Math.sqrt(
+                  Math.pow(pathX - svgX, 2) + Math.pow(pathY - svgY, 2)
+                );
+                if (distance <= clickRadius) {
+                  foundNearPoint = true;
+                  break;
+                }
+              }
+            }
+          }
+          return !foundNearPoint; // Return false to delete if we found a near point
+        } else if (drawing.type === 'arrow') {
+          // Check if click is near the arrow line
+          const distanceToStart = Math.sqrt(
+            Math.pow(drawing.startX - svgX, 2) + Math.pow(drawing.startY - svgY, 2)
+          );
+          const distanceToEnd = Math.sqrt(
+            Math.pow(drawing.endX - svgX, 2) + Math.pow(drawing.endY - svgY, 2)
+          );
+          // Also check distance to line (simplified)
+          const lineLength = Math.sqrt(
+            Math.pow(drawing.endX - drawing.startX, 2) + Math.pow(drawing.endY - drawing.startY, 2)
+          );
+          let distanceToLine = clickRadius + 1; // Default to not delete
+          if (lineLength > 0) {
+            const t = Math.max(0, Math.min(1, 
+              ((svgX - drawing.startX) * (drawing.endX - drawing.startX) + 
+               (svgY - drawing.startY) * (drawing.endY - drawing.startY)) / (lineLength * lineLength)
+            ));
+            const projX = drawing.startX + t * (drawing.endX - drawing.startX);
+            const projY = drawing.startY + t * (drawing.endY - drawing.startY);
+            distanceToLine = Math.sqrt(Math.pow(projX - svgX, 2) + Math.pow(projY - svgY, 2));
+          }
+          return Math.min(distanceToStart, distanceToEnd, distanceToLine) > clickRadius;
+        } else if (drawing.type === 'circle') {
+          // Check if click is inside or near the circle/ellipse
+          const centerX = (drawing.startX + drawing.endX) / 2;
+          const centerY = (drawing.startY + drawing.endY) / 2;
+          const radiusX = Math.abs(drawing.endX - drawing.startX) / 2;
+          const radiusY = Math.abs(drawing.endY - drawing.startY) / 2;
+          
+          // Check if point is inside ellipse or near its border
+          const normalizedX = (svgX - centerX) / (radiusX || 1);
+          const normalizedY = (svgY - centerY) / (radiusY || 1);
+          const distanceFromCenter = Math.sqrt(normalizedX * normalizedX + normalizedY * normalizedY);
+          
+          // Delete if click is near the ellipse (inside or close to border)
+          return distanceFromCenter > 1.2; // 1.2 gives some tolerance around the border
+        }
+        return true;
+      }));
+    }
+  };
+
+  const handleDrawingMove = (e) => {
+    if (!isDrawing || !isDrawingMode) return;
+    
+    e.preventDefault();
+    
+    const svg = e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    const scaleX = courtWidth / rect.width;
+    const scaleY = courtHeight / rect.height;
+    
+    const svgX = (clientX - rect.left) * scaleX;
+    const svgY = (clientY - rect.top) * scaleY;
+    
+    if (drawingTool === 'pen' && currentDrawing) {
+      setCurrentDrawing(prev => ({
+        ...prev,
+        path: prev.path + ` L ${svgX} ${svgY}`
+      }));
+    } else if ((drawingTool === 'arrow' || drawingTool === 'circle') && drawingStartPoint) {
+      setCurrentDrawing({
+        id: Date.now(),
+        type: drawingTool,
+        color: drawingColor,
+        startX: drawingStartPoint.x,
+        startY: drawingStartPoint.y,
+        endX: svgX,
+        endY: svgY,
+        strokeWidth: 3
+      });
+    }
+  };
+
+  const handleDrawingEnd = () => {
+    if (!isDrawing || !isDrawingMode) return;
+    
+    if (currentDrawing && (currentDrawing.path || (currentDrawing.startX !== currentDrawing.endX || currentDrawing.startY !== currentDrawing.endY))) {
+      setDrawings(prev => [...prev, { ...currentDrawing, id: Date.now() + Math.random() }]);
+    }
+    
+    setIsDrawing(false);
+    setCurrentDrawing(null);
+    setDrawingStartPoint(null);
+  };
+
+  const clearDrawings = () => {
+    setDrawings([]);
+    setCurrentDrawing(null);
+  };
+
+  const handleSVGMouseDown = (e) => {
+    if (isReplaying && isDrawingMode) {
+      handleDrawingStart(e);
+    }
+  };
+
   const handleMouseDown = (e, item, type) => {
+    if (isReplaying && isDrawingMode) {
+      // Handle drawing
+      handleDrawingStart(e);
+      return;
+    }
+    
     if (isReplaying) return;
     
     e.preventDefault();
@@ -420,6 +595,11 @@ const VolleyballPlayRecorder = () => {
   };
 
   const handleMouseMove = (e) => {
+    if (isReplaying && isDrawingMode && isDrawing) {
+      handleDrawingMove(e);
+      return;
+    }
+    
     if (isReplaying) return;
     
     e.preventDefault();
@@ -503,6 +683,11 @@ const VolleyballPlayRecorder = () => {
   };
 
   const handleMouseUp = () => {
+    if (isReplaying && isDrawingMode && isDrawing) {
+      handleDrawingEnd();
+      return;
+    }
+    
     if (isReplaying) return;
     
     if (isRecording && isCreatingArrow && currentArrow) {
@@ -646,6 +831,7 @@ const VolleyballPlayRecorder = () => {
   };
 
   const loadPlay = (play) => {
+    console.log('Loading play:', play.name, 'with', play.steps.length, 'steps');
     setCurrentPlay(play);
     setRecordedSteps([...play.steps]);
     
@@ -654,7 +840,15 @@ const VolleyballPlayRecorder = () => {
       setHomeTeam([...firstStep.startPositions.homeTeam]);
       setAwayTeam([...firstStep.startPositions.awayTeam]);
       setBall({ ...firstStep.startPositions.ball });
+      setAnimationPositions(firstStep.startPositions);
     }
+    
+    // Go straight to replay mode
+    setIsReplaying(true);
+    setIsPlaying(false); // Start ready to play
+    setReplayProgress(0);
+    setReplayPosition(0);
+    console.log('Play loaded, entering replay mode');
   };
 
   const deletePlay = (playId) => {
@@ -664,14 +858,41 @@ const VolleyballPlayRecorder = () => {
     }
   };
 
-  const animateStep = (step, duration = 2000) => {
+  const animateStep = (step, stepIndex = 0, duration = 2000) => {
     return new Promise((resolve) => {
-      const startTime = Date.now();
+      let startTime = Date.now();
+      let pausedDuration = 0;
       const startPositions = step.startPositions;
       const endPositions = step.endPositions;
       
       const animate = () => {
-        const elapsed = Date.now() - startTime;
+        // If replay was stopped, resolve immediately
+        if (!isReplaying) {
+          resolve();
+          return;
+        }
+        
+        // Handle pause state
+        if (isPaused) {
+          const pauseStart = Date.now();
+          const waitForResume = () => {
+            if (!isPaused || !isReplaying) {
+              if (isReplaying) {
+                // Add pause time to our total paused duration
+                pausedDuration += Date.now() - pauseStart;
+                requestAnimationFrame(animate);
+              } else {
+                resolve();
+              }
+            } else {
+              setTimeout(waitForResume, 50);
+            }
+          };
+          waitForResume();
+          return;
+        }
+        
+        const elapsed = Date.now() - startTime - pausedDuration;
         const progress = Math.min(elapsed / duration, 1);
         
         const easeInOut = progress < 0.5 
@@ -704,9 +925,17 @@ const VolleyballPlayRecorder = () => {
         
         setAnimationPositions(currentPositions);
         
+        // Update scrub bar position during animation (only if not being dragged)
+        if (!isDraggingScrubber && recordedSteps.length > 0) {
+          const stepProgress = (stepIndex + progress) / recordedSteps.length;
+          setReplayPosition(stepProgress);
+        }
+        
         if (progress < 1) {
           requestAnimationFrame(animate);
         } else {
+          // Animation complete - set final positions
+          setAnimationPositions(endPositions);
           resolve();
         }
       };
@@ -715,23 +944,256 @@ const VolleyballPlayRecorder = () => {
     });
   };
 
-  const replayPlay = async () => {
-    if (recordedSteps.length === 0) return;
+  const startReplay = async () => {
+    console.log('startReplay called - recordedSteps length:', recordedSteps.length);
     
-    setIsReplaying(true);
-    setReplayProgress(0);
+    if (recordedSteps.length === 0) {
+      console.log('No recorded steps, returning early');
+      return;
+    }
     
-    const initialStep = recordedSteps[0];
-    setAnimationPositions(initialStep.startPositions);
+    console.log('Starting replay from position:', replayPosition);
+    setIsPlaying(true);
     
-    for (let i = 0; i < recordedSteps.length; i++) {
+    // Calculate starting step from current scrub position
+    const totalSteps = recordedSteps.length;
+    const stepFloat = replayPosition * totalSteps;
+    const startStepIndex = Math.floor(stepFloat);
+    
+    // Go through each step starting from current position
+    for (let i = startStepIndex; i < recordedSteps.length; i++) {
+      console.log('Processing step', i + 1, 'of', recordedSteps.length);
+      
+      if (!isReplaying) break;
+      
       setReplayProgress(i);
-      await animateStep(recordedSteps[i]);
+      const step = recordedSteps[i];
+      
+      // Animate this step smoothly
+      await new Promise(resolve => {
+        const startTime = Date.now();
+        const duration = 2000;
+        
+        const animate = () => {
+          if (!isReplaying) {
+            resolve();
+            return;
+          }
+          
+          const elapsed = Date.now() - startTime;
+          const progress = Math.min(elapsed / duration, 1);
+          
+          const easeInOut = progress < 0.5 
+            ? 2 * progress * progress 
+            : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+          
+          const currentPositions = {
+            homeTeam: step.startPositions.homeTeam.map(player => {
+              const endPlayer = step.endPositions.homeTeam.find(p => p.id === player.id);
+              return {
+                ...player,
+                x: player.x + (endPlayer.x - player.x) * easeInOut,
+                y: player.y + (endPlayer.y - player.y) * easeInOut
+              };
+            }),
+            awayTeam: step.startPositions.awayTeam.map(player => {
+              const endPlayer = step.endPositions.awayTeam.find(p => p.id === player.id);
+              return {
+                ...player,
+                x: player.x + (endPlayer.x - player.x) * easeInOut,
+                y: player.y + (endPlayer.y - player.y) * easeInOut
+              };
+            }),
+            ball: {
+              ...step.startPositions.ball,
+              x: step.startPositions.ball.x + (step.endPositions.ball.x - step.startPositions.ball.x) * easeInOut,
+              y: step.startPositions.ball.y + (step.endPositions.ball.y - step.startPositions.ball.y) * easeInOut
+            }
+          };
+          
+          setAnimationPositions(currentPositions);
+          
+          // Update scrub bar (only if not being dragged)
+          if (!isDraggingScrubber && recordedSteps.length > 0) {
+            const totalProgress = (i + progress) / recordedSteps.length;
+            setReplayPosition(totalProgress);
+          }
+          
+          if (progress < 1) {
+            requestAnimationFrame(animate);
+          } else {
+            setAnimationPositions(step.endPositions);
+            resolve();
+          }
+        };
+        
+        animate();
+      });
+      
+      if (!isReplaying) break;
+      
+      // Brief pause between steps
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     
-    setIsReplaying(false);
+    console.log('Replay completed - resetting to beginning');
+    setReplayPosition(0);
     setReplayProgress(0);
+    
+    // Reset to initial positions
+    if (recordedSteps.length > 0) {
+      const firstStep = recordedSteps[0];
+      setAnimationPositions(firstStep.startPositions);
+    }
+    
+    setIsPlaying(false);
+  };
+
+  const pauseReplay = () => {
+    setIsPaused(true);
+  };
+
+  const stopReplay = () => {
+    setIsReplaying(false);
+    setIsPaused(false);
+    setReplayProgress(0);
+    setReplayPosition(0);
+  };
+
+  const goHome = () => {
+    setIsReplaying(false);
+    setIsPlaying(false);
+    setReplayProgress(0);
+    setReplayPosition(0);
+    setCurrentPlay(null);
+    setRecordedSteps([]);
+    setMovementArrows([]);
+    
+    // Clear drawings when leaving replay mode
+    setIsDrawingMode(false);
+    setDrawings([]);
+    setCurrentDrawing(null);
+    
+    // Reset to default positions but keep team customizations
+    const resetHomePositions = [
+      { x: 680, y: 750 },
+      { x: 680, y: 560 },
+      { x: 400, y: 560 },
+      { x: 120, y: 560 },
+      { x: 120, y: 750 },
+      { x: 400, y: 750 }
+    ];
+    
+    const resetAwayPositions = [
+      { x: 120, y: 210 },
+      { x: 120, y: 400 },
+      { x: 400, y: 400 },
+      { x: 680, y: 400 },
+      { x: 680, y: 210 },
+      { x: 400, y: 210 }
+    ];
+    
+    const updatedHomeTeam = homeTeam.map((player, index) => ({
+      ...player,
+      x: resetHomePositions[index].x,
+      y: resetHomePositions[index].y
+    }));
+    
+    const updatedAwayTeam = awayTeam.map((player, index) => ({
+      ...player,
+      x: resetAwayPositions[index].x,
+      y: resetAwayPositions[index].y
+    }));
+    
+    setHomeTeam(updatedHomeTeam);
+    setAwayTeam(updatedAwayTeam);
+    setBall({ x: 400, y: 480, visible: true });
+    setAnimationPositions({
+      homeTeam: updatedHomeTeam,
+      awayTeam: updatedAwayTeam,
+      ball: { x: 400, y: 480, visible: true }
+    });
+  };
+
+  const jumpToPosition = (position) => {
+    if (recordedSteps.length === 0) return;
+    
+    // Stop playing when manually scrubbing
+    setIsPlaying(false);
+    
+    // Clamp position between 0 and 1
+    const clampedPosition = Math.max(0, Math.min(1, position));
+    
+    // Calculate which step this position corresponds to
+    const totalSteps = recordedSteps.length;
+    const stepFloat = clampedPosition * totalSteps;
+    const stepIndex = Math.floor(stepFloat);
+    const stepProgress = stepFloat - stepIndex;
+    
+    setReplayPosition(clampedPosition);
+    
+    if (stepIndex >= totalSteps) {
+      // At the very end - show final positions
+      const lastStep = recordedSteps[totalSteps - 1];
+      setAnimationPositions(lastStep.endPositions);
+      setReplayProgress(totalSteps - 1);
+    } else if (stepIndex < 0) {
+      // At the very beginning - show initial positions
+      const firstStep = recordedSteps[0];
+      setAnimationPositions(firstStep.startPositions);
+      setReplayProgress(0);
+    } else {
+      // Interpolate within a step
+      const currentStep = recordedSteps[stepIndex];
+      setReplayProgress(stepIndex);
+      
+      if (stepProgress === 0) {
+        // Exactly at step start
+        setAnimationPositions(currentStep.startPositions);
+      } else {
+        // Interpolate between start and end of current step
+        const interpolatedPositions = {
+          homeTeam: currentStep.startPositions.homeTeam.map(player => {
+            const endPlayer = currentStep.endPositions.homeTeam.find(p => p.id === player.id);
+            return {
+              ...player,
+              x: player.x + (endPlayer.x - player.x) * stepProgress,
+              y: player.y + (endPlayer.y - player.y) * stepProgress
+            };
+          }),
+          awayTeam: currentStep.startPositions.awayTeam.map(player => {
+            const endPlayer = currentStep.endPositions.awayTeam.find(p => p.id === player.id);
+            return {
+              ...player,
+              x: player.x + (endPlayer.x - player.x) * stepProgress,
+              y: player.y + (endPlayer.y - player.y) * stepProgress
+            };
+          }),
+          ball: {
+            ...currentStep.startPositions.ball,
+            x: currentStep.startPositions.ball.x + (currentStep.endPositions.ball.x - currentStep.startPositions.ball.x) * stepProgress,
+            y: currentStep.startPositions.ball.y + (currentStep.endPositions.ball.y - currentStep.startPositions.ball.y) * stepProgress
+          }
+        };
+        
+        setAnimationPositions(interpolatedPositions);
+      }
+    }
+  };
+
+  const handleScrubberMouseDown = (e) => {
+    if (!recordedSteps.length) return;
+    setIsDraggingScrubber(true);
+    updateScrubberPosition(e);
+  };
+
+  const updateScrubberPosition = (e) => {
+    if (!recordedSteps.length) return;
+    const scrubBar = e.currentTarget.closest('.scrub-bar') || e.currentTarget;
+    const rect = scrubBar.getBoundingClientRect();
+    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+    const position = x / rect.width;
+    jumpToPosition(position);
   };
 
   const toggleBall = () => {
@@ -741,9 +1203,18 @@ const VolleyballPlayRecorder = () => {
   const resetPlay = () => {
     setIsRecording(false);
     setIsReplaying(false);
+    setIsPlaying(false);
+    setReplayPosition(0);
+    setIsDraggingScrubber(false);
     setRecordedSteps([]);
     setMovementArrows([]);
     setCurrentPlay(null);
+    
+    // Clear drawings when resetting
+    setIsDrawingMode(false);
+    setDrawings([]);
+    setCurrentDrawing(null);
+    
     // Don't reset currentTeamName - keep team context
     setBall({ x: 400, y: 480, visible: true });
     
@@ -804,6 +1275,34 @@ const VolleyballPlayRecorder = () => {
     }
   }, [homeTeam, awayTeam, ball, isReplaying]);
 
+  // Add global mouse event listeners for scrubber
+  useEffect(() => {
+    if (!isDraggingScrubber) return;
+
+    const handleMouseMove = (e) => {
+      if (!recordedSteps.length) return;
+      const scrubBar = document.querySelector('.scrub-bar');
+      if (!scrubBar) return;
+      
+      const rect = scrubBar.getBoundingClientRect();
+      const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+      const position = x / rect.width;
+      jumpToPosition(position);
+    };
+    
+    const handleMouseUp = () => {
+      setIsDraggingScrubber(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingScrubber, recordedSteps.length]);
+
   return (
     <div className="w-full max-w-7xl mx-auto p-2 sm:p-4 lg:p-6 bg-gradient-to-br from-gray-900 via-gray-800 to-slate-900 rounded-xl sm:rounded-2xl shadow-2xl">
       <div className="text-center mb-4 sm:mb-6 lg:mb-8">
@@ -812,6 +1311,47 @@ const VolleyballPlayRecorder = () => {
         </h1>
         <p className="text-gray-300 text-sm sm:text-base lg:text-lg">Professional Play Recording & Analysis Tool</p>
       </div>
+
+      {/* Scrub Bar - Only show when replaying or when there are recorded steps */}
+      {(isReplaying || (!isRecording && recordedSteps.length > 0)) && (
+        <div className="flex items-center justify-center gap-4 mb-4 sm:mb-6 px-4">
+          <span className="text-sm text-gray-400 min-w-[60px]">
+            Step {Math.min(replayProgress + 1, recordedSteps.length)} / {recordedSteps.length}
+          </span>
+          
+          <div className="flex-1 max-w-md">
+            <div 
+              className="scrub-bar relative h-2 bg-slate-600 rounded-full cursor-pointer"
+              onMouseDown={handleScrubberMouseDown}
+            >
+              {/* Progress track */}
+              <div 
+                className="absolute top-0 left-0 h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full transition-all duration-200"
+                style={{ width: `${replayPosition * 100}%` }}
+              />
+              
+              {/* Step markers */}
+              {recordedSteps.map((_, index) => (
+                <div
+                  key={index}
+                  className="absolute top-1/2 w-1 h-4 bg-white rounded-full transform -translate-y-1/2 -translate-x-1/2 shadow-lg"
+                  style={{ left: `${((index + 1) / recordedSteps.length) * 100}%` }}
+                />
+              ))}
+              
+              {/* Scrubber handle */}
+              <div 
+                className="absolute top-1/2 w-4 h-4 bg-white rounded-full transform -translate-y-1/2 -translate-x-1/2 shadow-lg border-2 border-blue-500 cursor-grab active:cursor-grabbing hover:scale-110 transition-transform"
+                style={{ left: `${replayPosition * 100}%` }}
+              />
+            </div>
+          </div>
+          
+          <span className="text-sm text-gray-400 min-w-[80px] text-right">
+            {isReplaying ? (isPlaying ? 'Playing' : 'Ready') : 'Ready'}
+          </span>
+        </div>
+      )}
       
       <div className="flex justify-center gap-2 sm:gap-3 mb-4 sm:mb-6 flex-wrap px-2">
         {!isRecording && !isReplaying && (
@@ -856,7 +1396,14 @@ const VolleyballPlayRecorder = () => {
                 </button>
 
                 <button
-                  onClick={replayPlay}
+                  onClick={() => {
+                    setIsReplaying(true);
+                    setIsPlaying(false); // Start ready to play
+                    setReplayProgress(0);
+                    setReplayPosition(0);
+                    const initialStep = recordedSteps[0];
+                    setAnimationPositions(initialStep.startPositions);
+                  }}
                   disabled={isReplaying}
                   className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 lg:px-5 py-2 sm:py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-blue-500/25 disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed disabled:hover:shadow-none disabled:transform-none transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
                   title="Preview recorded steps"
@@ -879,12 +1426,51 @@ const VolleyballPlayRecorder = () => {
         
         {!isRecording && !isReplaying && recordedSteps.length > 0 && (
           <button
-            onClick={replayPlay}
+            onClick={() => {
+              setIsReplaying(true);
+              setIsPlaying(false); // Start ready to play
+              setReplayProgress(0);
+              setReplayPosition(0);
+              const initialStep = recordedSteps[0];
+              setAnimationPositions(initialStep.startPositions);
+            }}
             className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 lg:px-6 py-2 sm:py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-blue-500/25 transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
           >
             <Play size={14} className="sm:w-4 sm:h-4" />
             <span>{currentPlay ? `Replay "${currentPlay.name}"` : `Replay (${recordedSteps.length})`}</span>
           </button>
+        )}
+
+        {isReplaying && (
+          <>
+            {/* Play Button - Always visible, greyed out when playing */}
+            <button
+              onClick={() => {
+                console.log('Play button clicked, isPlaying:', isPlaying);
+                if (!isPlaying) {
+                  startReplay();
+                }
+              }}
+              disabled={isPlaying}
+              className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-4 lg:px-6 py-2 sm:py-3 ${
+                isPlaying 
+                  ? 'bg-gray-500 cursor-not-allowed' 
+                  : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 transform hover:scale-105'
+              } text-white rounded-lg sm:rounded-xl font-semibold shadow-lg transition-all duration-200 text-sm sm:text-base`}
+            >
+              <Play size={14} className="sm:w-4 sm:h-4" />
+              <span>Play</span>
+            </button>
+            
+            {/* Home Button */}
+            <button
+              onClick={goHome}
+              className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 lg:px-6 py-2 sm:py-3 bg-gradient-to-r from-slate-500 to-gray-600 hover:from-slate-600 hover:to-gray-700 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-slate-500/25 transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
+            >
+              <Home size={14} className="sm:w-4 sm:h-4" />
+              <span>Home</span>
+            </button>
+          </>
         )}
         
         {!isRecording && !isReplaying && (
@@ -917,14 +1503,89 @@ const VolleyballPlayRecorder = () => {
           </>
         )}
         
-        <button
-          onClick={resetPlay}
-          className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 lg:px-5 py-2 sm:py-3 bg-gradient-to-r from-slate-600 to-gray-700 hover:from-slate-700 hover:to-gray-800 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-slate-500/25 transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
-        >
-          <RotateCcw size={14} className="sm:w-4 sm:h-4" />
-          <span>Reset</span>
-        </button>
+        {!isReplaying && (
+          <button
+            onClick={resetPlay}
+            className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 lg:px-5 py-2 sm:py-3 bg-gradient-to-r from-slate-600 to-gray-700 hover:from-slate-700 hover:to-gray-800 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-slate-500/25 transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
+          >
+            <RotateCcw size={14} className="sm:w-4 sm:h-4" />
+            <span>Reset</span>
+          </button>
+        )}
       </div>
+
+      {/* Drawing Tools - Show when in replay mode */}
+      {isReplaying && (
+        <div className="flex justify-center gap-2 sm:gap-3 mb-4 sm:mb-6 flex-wrap px-2">
+          <button
+            onClick={() => setIsDrawingMode(!isDrawingMode)}
+            className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 sm:py-3 ${
+              isDrawingMode
+                ? 'bg-gradient-to-r from-purple-500 to-purple-600'
+                : 'bg-gradient-to-r from-gray-500 to-gray-600 hover:from-gray-600 hover:to-gray-700'
+            } text-white rounded-lg sm:rounded-xl font-semibold shadow-lg transform hover:scale-105 transition-all duration-200 text-sm sm:text-base`}
+          >
+            <Pen size={14} className="sm:w-4 sm:h-4" />
+            <span>{isDrawingMode ? 'Exit Drawing' : 'Draw'}</span>
+          </button>
+
+          {isDrawingMode && (
+            <>
+              {/* Drawing Tools */}
+              <div className="flex gap-1 bg-slate-700/50 rounded-lg p-1">
+                <button
+                  onClick={() => setDrawingTool('pen')}
+                  className={`p-2 rounded ${drawingTool === 'pen' ? 'bg-purple-500 text-white' : 'text-gray-300 hover:text-white'}`}
+                  title="Pen"
+                >
+                  <Pen size={16} />
+                </button>
+                <button
+                  onClick={() => setDrawingTool('arrow')}
+                  className={`p-2 rounded ${drawingTool === 'arrow' ? 'bg-purple-500 text-white' : 'text-gray-300 hover:text-white'}`}
+                  title="Arrow"
+                >
+                  <ArrowRight size={16} />
+                </button>
+                <button
+                  onClick={() => setDrawingTool('circle')}
+                  className={`p-2 rounded ${drawingTool === 'circle' ? 'bg-purple-500 text-white' : 'text-gray-300 hover:text-white'}`}
+                  title="Circle"
+                >
+                  <Circle size={16} />
+                </button>
+                <button
+                  onClick={() => setDrawingTool('eraser')}
+                  className={`p-2 rounded ${drawingTool === 'eraser' ? 'bg-purple-500 text-white' : 'text-gray-300 hover:text-white'}`}
+                  title="Eraser"
+                >
+                  <Eraser size={16} />
+                </button>
+              </div>
+
+              {/* Color Picker */}
+              <div className="flex items-center gap-2 bg-slate-700/50 rounded-lg px-3 py-1">
+                <span className="text-xs text-gray-300">Color:</span>
+                <input
+                  type="color"
+                  value={drawingColor}
+                  onChange={(e) => setDrawingColor(e.target.value)}
+                  className="w-8 h-8 rounded border border-slate-600 bg-slate-700 cursor-pointer"
+                />
+              </div>
+
+              {/* Clear Drawings */}
+              <button
+                onClick={clearDrawings}
+                className="flex items-center gap-1 px-3 py-2 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white rounded-lg font-semibold shadow-lg transform hover:scale-105 transition-all duration-200 text-sm"
+              >
+                <Trash2 size={14} />
+                <span>Clear</span>
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="text-center mb-4 sm:mb-6 px-2">
         {!isRecording && !isReplaying && (
@@ -943,17 +1604,11 @@ const VolleyballPlayRecorder = () => {
           </div>
         )}
         {isReplaying && (
-          <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-blue-900/30 text-blue-200 rounded-lg border border-blue-800/50 backdrop-blur-sm text-sm sm:text-base">
-            <span className="text-lg sm:text-2xl">🎬</span>
-            <span className="font-bold">REPLAYING</span>
-            <span className="text-blue-300">- Step {replayProgress + 1} of {recordedSteps.length}</span>
-          </div>
-        )}
-        {!isRecording && !isReplaying && recordedSteps.length > 0 && (
-          <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-emerald-900/30 text-emerald-200 rounded-lg border border-emerald-800/50 backdrop-blur-sm text-sm sm:text-base">
-            <span className="text-lg sm:text-2xl">✅</span>
-            <span className="font-bold">Play recorded ({recordedSteps.length} steps)</span>
-            <span className="text-emerald-300 hidden sm:inline">- Ready to replay</span>
+          <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-purple-900/30 text-purple-200 rounded-lg border border-purple-800/50 backdrop-blur-sm text-sm sm:text-base">
+            <span className="text-lg sm:text-2xl">{isDrawingMode ? '✏️' : '🎬'}</span>
+            <span className="font-bold">{isDrawingMode ? 'DRAWING MODE' : 'REPLAY MODE'}</span>
+            {currentPlay && <span className="text-purple-300 hidden sm:inline">- "{currentPlay.name}"</span>}
+            <span className="text-purple-300">- Step {Math.min(replayProgress + 1, recordedSteps.length)} of {recordedSteps.length}</span>
           </div>
         )}
       </div>
@@ -1495,7 +2150,19 @@ const VolleyballPlayRecorder = () => {
                 <input
                   type="checkbox"
                   checked={applyToWholeTeam}
-                  onChange={(e) => setApplyToWholeTeam(e.target.checked)}
+                  onChange={(e) => {
+                    const isChecked = e.target.checked;
+                    setApplyToWholeTeam(isChecked);
+                    
+                    // If checking the box, apply current color to whole team
+                    if (isChecked && editingPlayerColor) {
+                      if (editingPlayerColor.team === 'home') {
+                        setHomeTeam(prev => prev.map(player => ({ ...player, color: editingPlayerColor.color })));
+                      } else {
+                        setAwayTeam(prev => prev.map(player => ({ ...player, color: editingPlayerColor.color })));
+                      }
+                    }
+                  }}
                   className="w-4 h-4 text-blue-600 bg-slate-700 border-slate-600 rounded focus:ring-blue-500 focus:ring-2"
                 />
                 <span className="text-sm text-gray-300">
@@ -1793,13 +2460,17 @@ const VolleyballPlayRecorder = () => {
               width="100%"
               height="auto"
               viewBox={`0 0 ${courtWidth} ${courtHeight}`}
-              className={`border-2 sm:border-4 border-slate-600 rounded-xl sm:rounded-2xl shadow-2xl bg-gradient-to-b from-emerald-400 via-green-500 to-emerald-600 ${isRecording ? 'cursor-crosshair' : 'cursor-default'} max-h-screen`}
+              className={`border-2 sm:border-4 border-slate-600 rounded-xl sm:rounded-2xl shadow-2xl bg-gradient-to-b from-emerald-400 via-green-500 to-emerald-600 ${
+                isRecording ? 'cursor-crosshair' : isDrawingMode ? 'cursor-crosshair' : 'cursor-default'
+              } max-h-screen`}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
               onTouchMove={handleMouseMove}
               onTouchEnd={handleMouseUp}
               onTouchCancel={handleMouseUp}
+              onMouseDown={handleSVGMouseDown}
+              onTouchStart={handleSVGMouseDown}
               style={{ 
                 userSelect: 'none', 
                 touchAction: 'none', 
@@ -2075,11 +2746,107 @@ const VolleyballPlayRecorder = () => {
                   />
                 </g>
               )}
+
+              {/* Render Drawings */}
+              {drawings.map(drawing => (
+                <g key={drawing.id}>
+                  {drawing.type === 'pen' && (
+                    <path
+                      d={drawing.path}
+                      stroke={drawing.color}
+                      strokeWidth={drawing.strokeWidth}
+                      fill="none"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  )}
+                  {drawing.type === 'arrow' && (
+                    <>
+                      <line
+                        x1={drawing.startX}
+                        y1={drawing.startY}
+                        x2={drawing.endX}
+                        y2={drawing.endY}
+                        stroke={drawing.color}
+                        strokeWidth={drawing.strokeWidth}
+                        strokeLinecap="round"
+                      />
+                      {/* Arrowhead */}
+                      <polygon
+                        points={`${drawing.endX},${drawing.endY} ${drawing.endX - 15},${drawing.endY - 8} ${drawing.endX - 15},${drawing.endY + 8}`}
+                        fill={drawing.color}
+                        transform={`rotate(${Math.atan2(drawing.endY - drawing.startY, drawing.endX - drawing.startX) * 180 / Math.PI} ${drawing.endX} ${drawing.endY})`}
+                      />
+                    </>
+                  )}
+                  {drawing.type === 'circle' && (
+                    <ellipse
+                      cx={(drawing.startX + drawing.endX) / 2}
+                      cy={(drawing.startY + drawing.endY) / 2}
+                      rx={Math.abs(drawing.endX - drawing.startX) / 2}
+                      ry={Math.abs(drawing.endY - drawing.startY) / 2}
+                      stroke={drawing.color}
+                      strokeWidth={drawing.strokeWidth}
+                      fill="none"
+                    />
+                  )}
+                </g>
+              ))}
+
+              {/* Render Current Drawing Preview */}
+              {currentDrawing && (
+                <g>
+                  {currentDrawing.type === 'pen' && (
+                    <path
+                      d={currentDrawing.path}
+                      stroke={currentDrawing.color}
+                      strokeWidth={currentDrawing.strokeWidth}
+                      fill="none"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      opacity="0.8"
+                    />
+                  )}
+                  {currentDrawing.type === 'arrow' && (
+                    <>
+                      <line
+                        x1={currentDrawing.startX}
+                        y1={currentDrawing.startY}
+                        x2={currentDrawing.endX}
+                        y2={currentDrawing.endY}
+                        stroke={currentDrawing.color}
+                        strokeWidth={currentDrawing.strokeWidth}
+                        strokeLinecap="round"
+                        opacity="0.8"
+                      />
+                      <polygon
+                        points={`${currentDrawing.endX},${currentDrawing.endY} ${currentDrawing.endX - 15},${currentDrawing.endY - 8} ${currentDrawing.endX - 15},${currentDrawing.endY + 8}`}
+                        fill={currentDrawing.color}
+                        transform={`rotate(${Math.atan2(currentDrawing.endY - currentDrawing.startY, currentDrawing.endX - currentDrawing.startX) * 180 / Math.PI} ${currentDrawing.endX} ${currentDrawing.endY})`}
+                        opacity="0.8"
+                      />
+                    </>
+                  )}
+                  {currentDrawing.type === 'circle' && (
+                    <ellipse
+                      cx={(currentDrawing.startX + currentDrawing.endX) / 2}
+                      cy={(currentDrawing.startY + currentDrawing.endY) / 2}
+                      rx={Math.abs(currentDrawing.endX - currentDrawing.startX) / 2}
+                      ry={Math.abs(currentDrawing.endY - currentDrawing.startY) / 2}
+                      stroke={currentDrawing.color}
+                      strokeWidth={currentDrawing.strokeWidth}
+                      fill="none"
+                      opacity="0.8"
+                    />
+                  )}
+                </g>
+              )}
             </svg>
           </div>
         </div>
       </div>
-  <div className="mt-4 sm:mt-6 lg:mt-8 p-3 sm:p-4 lg:p-6 bg-gradient-to-br from-slate-800 to-gray-900 rounded-xl sm:rounded-2xl border border-slate-700 shadow-2xl">
+
+      <div className="mt-4 sm:mt-6 lg:mt-8 p-3 sm:p-4 lg:p-6 bg-gradient-to-br from-slate-800 to-gray-900 rounded-xl sm:rounded-2xl border border-slate-700 shadow-2xl">
         <h3 className="font-bold text-lg sm:text-xl text-white mb-3 sm:mb-4 text-center">How to Customize Your Team</h3>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
           <div>
@@ -2108,7 +2875,7 @@ const VolleyballPlayRecorder = () => {
         </div>
       </div>
     </div>
-  );  
+  );
 };
 
 export default VolleyballPlayRecorder;

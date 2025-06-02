@@ -20,7 +20,7 @@ const VolleyballPlayRecorder = () => {
     { id: 12, x: 400, y: 210, position: '6', name: 'Player 6', color: '#EF4444' }
   ]);
 
-  const [ball, setBall] = useState({ x: 400, y: 480, visible: true });
+  const [ball, setBall] = useState({ x: 770, y: 480 });
   const [movementArrows, setMovementArrows] = useState([]);
   const [isRecording, setIsRecording] = useState(false);
   const [recordedSteps, setRecordedSteps] = useState([]);
@@ -42,7 +42,7 @@ const VolleyballPlayRecorder = () => {
   const [animationPositions, setAnimationPositions] = useState({
     homeTeam: [...homeTeam],
     awayTeam: [...awayTeam],
-    ball: { ...ball }
+    ball: { x: 770, y: 480 }
   });
   const [editingPlayer, setEditingPlayer] = useState(null);
   const [tempName, setTempName] = useState('');
@@ -379,6 +379,126 @@ const VolleyballPlayRecorder = () => {
     setShowResetOptions(prev => ({ ...prev, [team]: false }));
   };
 
+  const applyVolleyballConstraints = (draggedPlayer, newX, newY, team) => {
+    const currentTeam = team === 'home' ? homeTeam : awayTeam;
+    const playerPos = draggedPlayer.position;
+    
+    let constrainedX = newX;
+    let constrainedY = newY;
+    
+    // Define position relationships based on actual court positions
+    const frontRow = ['2', '3', '4']; // positions 2, 3, 4 are front row
+    const backRow = ['1', '5', '6'];  // positions 1, 5, 6 are back row
+    
+    // Get players sorted by their actual X positions
+    const frontRowPlayers = currentTeam.filter(p => frontRow.includes(p.position)).sort((a, b) => a.x - b.x);
+    const backRowPlayers = currentTeam.filter(p => backRow.includes(p.position)).sort((a, b) => a.x - b.x);
+    
+    // Front-to-back constraints (y-coordinate)
+    if (backRow.includes(playerPos)) {
+      // Find corresponding front row player by X position
+      const playerIndex = backRowPlayers.findIndex(p => p.position === playerPos);
+      const correspondingFrontPlayer = frontRowPlayers[playerIndex];
+      
+      if (correspondingFrontPlayer) {
+        if (team === 'away') {
+          // For away team, back row cannot move past front row toward net (larger Y)
+          constrainedY = Math.min(constrainedY, correspondingFrontPlayer.y);
+        } else {
+          // For home team, back row cannot move past front row toward net (smaller Y)
+          constrainedY = Math.max(constrainedY, correspondingFrontPlayer.y);
+        }
+      }
+    } else if (frontRow.includes(playerPos)) {
+      // Find corresponding back row player by X position
+      const playerIndex = frontRowPlayers.findIndex(p => p.position === playerPos);
+      const correspondingBackPlayer = backRowPlayers[playerIndex];
+      
+      if (correspondingBackPlayer) {
+        if (team === 'away') {
+          // For away team, front row cannot move past back row away from net (smaller Y)
+          constrainedY = Math.max(constrainedY, correspondingBackPlayer.y);
+        } else {
+          // For home team, front row cannot move past back row away from net (larger Y)
+          constrainedY = Math.min(constrainedY, correspondingBackPlayer.y);
+        }
+      }
+    }
+    
+    // Left-to-right constraints (x-coordinate) - based on current positions
+    const minPlayerDistance = 20; // Minimum distance between players
+    
+    if (frontRow.includes(playerPos)) {
+      // Get other front row players (excluding the one being dragged)
+      const otherFrontPlayers = currentTeam.filter(p => 
+        frontRow.includes(p.position) && p.position !== playerPos
+      ).sort((a, b) => a.x - b.x);
+      
+      // Find players to the left and right of the dragged player's current position
+      const leftPlayers = otherFrontPlayers.filter(p => p.x < draggedPlayer.x);
+      const rightPlayers = otherFrontPlayers.filter(p => p.x > draggedPlayer.x);
+      
+      // Cannot move past the rightmost left player (with buffer)
+      if (leftPlayers.length > 0) {
+        const rightmostLeftPlayer = leftPlayers[leftPlayers.length - 1];
+        constrainedX = Math.max(constrainedX, rightmostLeftPlayer.x + minPlayerDistance);
+      }
+      
+      // Cannot move past the leftmost right player (with buffer)
+      if (rightPlayers.length > 0) {
+        const leftmostRightPlayer = rightPlayers[0];
+        constrainedX = Math.min(constrainedX, leftmostRightPlayer.x - minPlayerDistance);
+      }
+      
+      // Also check if we're too close to any other front row player
+      otherFrontPlayers.forEach(player => {
+        const distance = Math.abs(constrainedX - player.x);
+        if (distance < minPlayerDistance) {
+          if (constrainedX < player.x) {
+            constrainedX = player.x - minPlayerDistance;
+          } else {
+            constrainedX = player.x + minPlayerDistance;
+          }
+        }
+      });
+    } else if (backRow.includes(playerPos)) {
+      // Get other back row players (excluding the one being dragged)
+      const otherBackPlayers = currentTeam.filter(p => 
+        backRow.includes(p.position) && p.position !== playerPos
+      ).sort((a, b) => a.x - b.x);
+      
+      // Find players to the left and right of the dragged player's current position
+      const leftPlayers = otherBackPlayers.filter(p => p.x < draggedPlayer.x);
+      const rightPlayers = otherBackPlayers.filter(p => p.x > draggedPlayer.x);
+      
+      // Cannot move past the rightmost left player (with buffer)
+      if (leftPlayers.length > 0) {
+        const rightmostLeftPlayer = leftPlayers[leftPlayers.length - 1];
+        constrainedX = Math.max(constrainedX, rightmostLeftPlayer.x + minPlayerDistance);
+      }
+      
+      // Cannot move past the leftmost right player (with buffer)
+      if (rightPlayers.length > 0) {
+        const leftmostRightPlayer = rightPlayers[0];
+        constrainedX = Math.min(constrainedX, leftmostRightPlayer.x - minPlayerDistance);
+      }
+      
+      // Also check if we're too close to any other back row player
+      otherBackPlayers.forEach(player => {
+        const distance = Math.abs(constrainedX - player.x);
+        if (distance < minPlayerDistance) {
+          if (constrainedX < player.x) {
+            constrainedX = player.x - minPlayerDistance;
+          } else {
+            constrainedX = player.x + minPlayerDistance;
+          }
+        }
+      });
+    }
+    
+    return { x: constrainedX, y: constrainedY };
+  };
+
   const handleDrawingStart = (e) => {
     if (!isDrawingMode) return;
     
@@ -654,6 +774,11 @@ const VolleyballPlayRecorder = () => {
       }
 
       if (draggedItem.type === 'home') {
+        // Apply volleyball overlap constraints
+        const constrainedPos = applyVolleyballConstraints(draggedItem, constrainedX, constrainedY, 'home');
+        constrainedX = constrainedPos.x;
+        constrainedY = constrainedPos.y;
+        
         setHomeTeam(prev => prev.map(player => 
           player.id === draggedItem.id ? { ...player, x: constrainedX, y: constrainedY } : player
         ));
@@ -664,6 +789,11 @@ const VolleyballPlayRecorder = () => {
           )
         }));
       } else if (draggedItem.type === 'away') {
+        // Apply volleyball overlap constraints
+        const constrainedPos = applyVolleyballConstraints(draggedItem, constrainedX, constrainedY, 'away');
+        constrainedX = constrainedPos.x;
+        constrainedY = constrainedPos.y;
+        
         setAwayTeam(prev => prev.map(player => 
           player.id === draggedItem.id ? { ...player, x: constrainedX, y: constrainedY } : player
         ));
@@ -1108,11 +1238,11 @@ const VolleyballPlayRecorder = () => {
     
     setHomeTeam(updatedHomeTeam);
     setAwayTeam(updatedAwayTeam);
-    setBall({ x: 400, y: 480, visible: true });
+    setBall({ x: 770, y: 480 });
     setAnimationPositions({
       homeTeam: updatedHomeTeam,
       awayTeam: updatedAwayTeam,
-      ball: { x: 400, y: 480, visible: true }
+      ball: { x: 770, y: 480 }
     });
   };
 
@@ -1197,10 +1327,6 @@ const VolleyballPlayRecorder = () => {
     jumpToPosition(position);
   };
 
-  const toggleBall = () => {
-    setBall(prev => ({ ...prev, visible: !prev.visible }));
-  };
-
   const resetPlay = () => {
     setIsRecording(false);
     setIsReplaying(false);
@@ -1217,7 +1343,7 @@ const VolleyballPlayRecorder = () => {
     setCurrentDrawing(null);
     
     // Don't reset currentTeamName - keep team context
-    setBall({ x: 400, y: 480, visible: true });
+    setBall({ x: 770, y: 480 });
     
     // Reset only positions, preserve names, colors, and numbers
     const resetHomePositions = [
@@ -1476,17 +1602,6 @@ const VolleyballPlayRecorder = () => {
         
         {!isRecording && !isReplaying && (
           <>
-            <button
-              onClick={toggleBall}
-              className={`px-2 sm:px-3 lg:px-5 py-2 sm:py-3 bg-gradient-to-r ${
-                ball.visible 
-                  ? 'from-orange-400 to-yellow-400 hover:from-orange-500 hover:to-yellow-500' 
-                  : 'from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600'
-              } text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-orange-500/25 transform hover:scale-105 transition-all duration-200 text-sm sm:text-base`}
-            >
-              <span>{ball.visible ? 'Hide Ball' : 'Show Ball'}</span>
-            </button>
-
             <button
               onClick={() => setShowPlayerDrawer(!showPlayerDrawer)}
               className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 lg:px-5 py-2 sm:py-3 bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-600 hover:to-violet-700 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-purple-500/25 transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
@@ -2769,25 +2884,23 @@ const VolleyballPlayRecorder = () => {
               ))}
 
               {/* Ball */}
-              {displayPositions.ball.visible && (
-                <g className="cursor-grab hover:brightness-110 transition-all duration-200"
-                   onMouseDown={(e) => !isReplaying && handleMouseDown(e, displayPositions.ball, 'ball')}
-                   onTouchStart={(e) => !isReplaying && handleMouseDown(e, displayPositions.ball, 'ball')}
-                   style={{ userSelect: 'none' }}>
-                  <circle
-                    cx={displayPositions.ball.x}
-                    cy={displayPositions.ball.y}
-                    r="35"
-                    fill="transparent"
-                    className="sm:hidden"
-                  />
-                  <use
-                    href="#modernVolleyball"
-                    x={displayPositions.ball.x}
-                    y={displayPositions.ball.y}
-                  />
-                </g>
-              )}
+              <g className="cursor-grab hover:brightness-110 transition-all duration-200"
+                 onMouseDown={(e) => !isReplaying && handleMouseDown(e, displayPositions.ball, 'ball')}
+                 onTouchStart={(e) => !isReplaying && handleMouseDown(e, displayPositions.ball, 'ball')}
+                 style={{ userSelect: 'none' }}>
+                <circle
+                  cx={displayPositions.ball.x}
+                  cy={displayPositions.ball.y}
+                  r="35"
+                  fill="transparent"
+                  className="sm:hidden"
+                />
+                <use
+                  href="#modernVolleyball"
+                  x={displayPositions.ball.x}
+                  y={displayPositions.ball.y}
+                />
+              </g>
 
               {/* Render Drawings */}
               {drawings.map(drawing => (

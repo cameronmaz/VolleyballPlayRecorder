@@ -31,6 +31,7 @@ const VolleyballPlayRecorder = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [replayPosition, setReplayPosition] = useState(0); // 0 to 1 representing full play progress
   const [isDraggingScrubber, setIsDraggingScrubber] = useState(false);
+  const [isPreviewing, setIsPreviewing] = useState(false);
   const [isCreatingArrow, setIsCreatingArrow] = useState(false);
   const [arrowStart, setArrowStart] = useState(null);
   const [currentArrow, setCurrentArrow] = useState(null);
@@ -663,7 +664,7 @@ const VolleyballPlayRecorder = () => {
       return;
     }
     
-    if (isReplaying) return;
+    if (isReplaying || isPreviewing) return;
     
     e.preventDefault();
     e.stopPropagation();
@@ -721,7 +722,7 @@ const VolleyballPlayRecorder = () => {
       return;
     }
     
-    if (isReplaying) return;
+    if (isReplaying || isPreviewing) return;
     
     e.preventDefault();
     
@@ -819,7 +820,7 @@ const VolleyballPlayRecorder = () => {
       return;
     }
     
-    if (isReplaying) return;
+    if (isReplaying || isPreviewing) return;
     
     if (isRecording && isCreatingArrow && currentArrow) {
       const distance = Math.sqrt(
@@ -989,90 +990,102 @@ const VolleyballPlayRecorder = () => {
     }
   };
 
-  const animateStep = (step, stepIndex = 0, duration = 2000) => {
-    return new Promise((resolve) => {
-      let startTime = Date.now();
-      let pausedDuration = 0;
-      const startPositions = step.startPositions;
-      const endPositions = step.endPositions;
+  const startPreview = async () => {
+    if (recordedSteps.length === 0) return;
+    
+    setIsPreviewing(true);
+    
+    // Set initial positions
+    const firstStep = recordedSteps[0];
+    setAnimationPositions(firstStep.startPositions);
+    
+    // Small delay before starting
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Go through each step
+    for (let i = 0; i < recordedSteps.length; i++) {
+      const step = recordedSteps[i];
       
-      const animate = () => {
-        // If replay was stopped, resolve immediately
-        if (!isReplaying) {
-          resolve();
-          return;
-        }
+      // Animate this step smoothly
+      await new Promise(resolve => {
+        const startTime = Date.now();
+        const duration = 1500; // Duration for each step
+        let animationFrameId;
         
-        // Handle pause state
-        if (isPaused) {
-          const pauseStart = Date.now();
-          const waitForResume = () => {
-            if (!isPaused || !isReplaying) {
-              if (isReplaying) {
-                // Add pause time to our total paused duration
-                pausedDuration += Date.now() - pauseStart;
-                requestAnimationFrame(animate);
-              } else {
-                resolve();
-              }
-            } else {
-              setTimeout(waitForResume, 50);
+        const animate = () => {
+          const elapsed = Date.now() - startTime;
+          const progress = Math.min(elapsed / duration, 1);
+          
+          // Smooth easing function
+          const easeInOut = progress < 0.5 
+            ? 2 * progress * progress 
+            : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+          
+          // Calculate interpolated positions
+          const currentPositions = {
+            homeTeam: step.startPositions.homeTeam.map(player => {
+              const endPlayer = step.endPositions.homeTeam.find(p => p.id === player.id);
+              if (!endPlayer) return player;
+              return {
+                ...player,
+                x: player.x + (endPlayer.x - player.x) * easeInOut,
+                y: player.y + (endPlayer.y - player.y) * easeInOut
+              };
+            }),
+            awayTeam: step.startPositions.awayTeam.map(player => {
+              const endPlayer = step.endPositions.awayTeam.find(p => p.id === player.id);
+              if (!endPlayer) return player;
+              return {
+                ...player,
+                x: player.x + (endPlayer.x - player.x) * easeInOut,
+                y: player.y + (endPlayer.y - player.y) * easeInOut
+              };
+            }),
+            ball: {
+              ...step.startPositions.ball,
+              x: step.startPositions.ball.x + (step.endPositions.ball.x - step.startPositions.ball.x) * easeInOut,
+              y: step.startPositions.ball.y + (step.endPositions.ball.y - step.startPositions.ball.y) * easeInOut
             }
           };
-          waitForResume();
-          return;
-        }
-        
-        const elapsed = Date.now() - startTime - pausedDuration;
-        const progress = Math.min(elapsed / duration, 1);
-        
-        const easeInOut = progress < 0.5 
-          ? 2 * progress * progress 
-          : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-        
-        const currentPositions = {
-          homeTeam: startPositions.homeTeam.map(player => {
-            const endPlayer = endPositions.homeTeam.find(p => p.id === player.id);
-            return {
-              ...player,
-              x: player.x + (endPlayer.x - player.x) * easeInOut,
-              y: player.y + (endPlayer.y - player.y) * easeInOut
-            };
-          }),
-          awayTeam: startPositions.awayTeam.map(player => {
-            const endPlayer = endPositions.awayTeam.find(p => p.id === player.id);
-            return {
-              ...player,
-              x: player.x + (endPlayer.x - player.x) * easeInOut,
-              y: player.y + (endPlayer.y - player.y) * easeInOut
-            };
-          }),
-          ball: {
-            ...startPositions.ball,
-            x: startPositions.ball.x + (endPositions.ball.x - startPositions.ball.x) * easeInOut,
-            y: startPositions.ball.y + (endPositions.ball.y - startPositions.ball.y) * easeInOut
+          
+          setAnimationPositions(currentPositions);
+          
+          if (progress < 1) {
+            animationFrameId = requestAnimationFrame(animate);
+          } else {
+            // Set final positions for this step
+            setAnimationPositions(step.endPositions);
+            resolve();
           }
         };
         
-        setAnimationPositions(currentPositions);
+        animationFrameId = requestAnimationFrame(animate);
         
-        // Update scrub bar position during animation (only if not being dragged)
-        if (!isDraggingScrubber && recordedSteps.length > 0) {
-          const stepProgress = (stepIndex + progress) / recordedSteps.length;
-          setReplayPosition(stepProgress);
-        }
-        
-        if (progress < 1) {
-          requestAnimationFrame(animate);
-        } else {
-          // Animation complete - set final positions
-          setAnimationPositions(endPositions);
-          resolve();
-        }
-      };
+        // Cleanup function in case preview is cancelled
+        return () => {
+          if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+          }
+        };
+      });
       
-      animate();
+      // Brief pause between steps (if not the last step)
+      if (i < recordedSteps.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+    }
+    
+    // Preview complete - small delay then reset
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    // Reset to actual current positions (what the user sees in recording mode)
+    setAnimationPositions({
+      homeTeam: [...homeTeam],
+      awayTeam: [...awayTeam],
+      ball: { ...ball }
     });
+    
+    setIsPreviewing(false);
   };
 
   const startReplay = async () => {
@@ -1178,17 +1191,6 @@ const VolleyballPlayRecorder = () => {
     }
     
     setIsPlaying(false);
-  };
-
-  const pauseReplay = () => {
-    setIsPaused(true);
-  };
-
-  const stopReplay = () => {
-    setIsReplaying(false);
-    setIsPaused(false);
-    setReplayProgress(0);
-    setReplayPosition(0);
   };
 
   const goHome = () => {
@@ -1386,21 +1388,21 @@ const VolleyballPlayRecorder = () => {
     });
   };
 
-  const displayPositions = isReplaying ? animationPositions : {
+  const displayPositions = (isReplaying || isPreviewing) ? animationPositions : {
     homeTeam,
     awayTeam,
     ball
   };
 
   useEffect(() => {
-    if (!isReplaying) {
+    if (!isReplaying && !isPreviewing) {
       setAnimationPositions({
         homeTeam: [...homeTeam],
         awayTeam: [...awayTeam],
         ball: { ...ball }
       });
     }
-  }, [homeTeam, awayTeam, ball, isReplaying]);
+  }, [homeTeam, awayTeam, ball, isReplaying, isPreviewing]);
 
   // Add global mouse event listeners for scrubber
   useEffect(() => {
@@ -1439,8 +1441,8 @@ const VolleyballPlayRecorder = () => {
         <p className="text-gray-300 text-sm sm:text-base lg:text-lg">Professional Play Recording & Analysis Tool</p>
       </div>
 
-      {/* Scrub Bar - Only show when replaying or when there are recorded steps */}
-      {(isReplaying || (!isRecording && recordedSteps.length > 0)) && (
+      {/* Scrub Bar - Only show when replaying or when there are recorded steps (but not during preview) */}
+      {(isReplaying || (!isRecording && !isPreviewing && recordedSteps.length > 0)) && (
         <div className="flex items-center justify-center gap-4 mb-4 sm:mb-6 px-4">
           <span className="text-sm text-gray-400 min-w-[60px]">
             Step {Math.min(replayProgress + 1, recordedSteps.length)} / {recordedSteps.length}
@@ -1523,20 +1525,13 @@ const VolleyballPlayRecorder = () => {
                 </button>
 
                 <button
-                  onClick={() => {
-                    setIsReplaying(true);
-                    setIsPlaying(false); // Start ready to play
-                    setReplayProgress(0);
-                    setReplayPosition(0);
-                    const initialStep = recordedSteps[0];
-                    setAnimationPositions(initialStep.startPositions);
-                  }}
-                  disabled={isReplaying}
+                  onClick={startPreview}
+                  disabled={isPreviewing}
                   className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 lg:px-5 py-2 sm:py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-blue-500/25 disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed disabled:hover:shadow-none disabled:transform-none transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
                   title="Preview recorded steps"
                 >
                   <Play size={14} className="sm:w-4 sm:h-4" />
-                  <span>Preview ({recordedSteps.length})</span>
+                  <span>{isPreviewing ? 'Previewing...' : `Preview (${recordedSteps.length})`}</span>
                 </button>
               </>
             )}
@@ -1630,8 +1625,8 @@ const VolleyballPlayRecorder = () => {
         )}
       </div>
 
-      {/* Drawing Tools - Show when in replay mode */}
-      {isReplaying && (
+      {/* Drawing Tools - Show when in replay mode (not preview) */}
+      {isReplaying && !isPreviewing && (
         <div className="flex justify-center gap-2 sm:gap-3 mb-4 sm:mb-6 flex-wrap px-2">
           <button
             onClick={() => setIsDrawingMode(!isDrawingMode)}
@@ -1704,14 +1699,14 @@ const VolleyballPlayRecorder = () => {
       )}
 
       <div className="text-center mb-4 sm:mb-6 px-2">
-        {!isRecording && !isReplaying && (
+        {!isRecording && !isReplaying && !isPreviewing && (
           <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-slate-800/80 text-slate-200 rounded-lg border border-slate-700/50 backdrop-blur-sm text-sm sm:text-base">
             <span className="text-lg sm:text-2xl">⚙️</span>
             <span className="font-medium">SETUP MODE</span>
             <span className="text-slate-400 hidden sm:inline">- Drag players and ball to position them</span>
           </div>
         )}
-        {isRecording && (
+        {isRecording && !isPreviewing && (
           <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-red-900/30 text-red-200 rounded-lg border border-red-800/50 backdrop-blur-sm animate-pulse text-sm sm:text-base">
             <span className="text-lg sm:text-2xl">🔴</span>
             <span className="font-bold">RECORDING</span>
@@ -1719,7 +1714,14 @@ const VolleyballPlayRecorder = () => {
             <span className="text-red-300 lg:hidden">({movementArrows.length} movements)</span>
           </div>
         )}
-        {isReplaying && (
+        {isPreviewing && (
+          <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-blue-900/30 text-blue-200 rounded-lg border border-blue-800/50 backdrop-blur-sm text-sm sm:text-base">
+            <span className="text-lg sm:text-2xl">👁️</span>
+            <span className="font-bold">PREVIEWING PLAY</span>
+            <span className="text-blue-300">- {recordedSteps.length} steps</span>
+          </div>
+        )}
+        {isReplaying && !isPreviewing && (
           <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-purple-900/30 text-purple-200 rounded-lg border border-purple-800/50 backdrop-blur-sm text-sm sm:text-base">
             <span className="text-lg sm:text-2xl">{isDrawingMode ? '✏️' : '🎬'}</span>
             <span className="font-bold">{isDrawingMode ? 'DRAWING MODE' : 'REPLAY MODE'}</span>
@@ -2793,8 +2795,8 @@ const VolleyballPlayRecorder = () => {
               {displayPositions.awayTeam.map(player => (
                 <g key={player.id} 
                    className="cursor-grab hover:brightness-110 transition-all duration-200"
-                   onMouseDown={(e) => !isReplaying && handleMouseDown(e, player, 'away')}
-                   onTouchStart={(e) => !isReplaying && handleMouseDown(e, player, 'away')}
+                   onMouseDown={(e) => !isReplaying && !isPreviewing && handleMouseDown(e, player, 'away')}
+                   onTouchStart={(e) => !isReplaying && !isPreviewing && handleMouseDown(e, player, 'away')}
                    style={{ userSelect: 'none' }}>
                   <circle
                     cx={player.x}
@@ -2840,8 +2842,8 @@ const VolleyballPlayRecorder = () => {
               {displayPositions.homeTeam.map(player => (
                 <g key={player.id}
                    className="cursor-grab hover:brightness-110 transition-all duration-200"
-                   onMouseDown={(e) => !isReplaying && handleMouseDown(e, player, 'home')}
-                   onTouchStart={(e) => !isReplaying && handleMouseDown(e, player, 'home')}
+                   onMouseDown={(e) => !isReplaying && !isPreviewing && handleMouseDown(e, player, 'home')}
+                   onTouchStart={(e) => !isReplaying && !isPreviewing && handleMouseDown(e, player, 'home')}
                    style={{ userSelect: 'none' }}>
                   <circle
                     cx={player.x}
@@ -2885,8 +2887,8 @@ const VolleyballPlayRecorder = () => {
 
               {/* Ball */}
               <g className="cursor-grab hover:brightness-110 transition-all duration-200"
-                 onMouseDown={(e) => !isReplaying && handleMouseDown(e, displayPositions.ball, 'ball')}
-                 onTouchStart={(e) => !isReplaying && handleMouseDown(e, displayPositions.ball, 'ball')}
+                 onMouseDown={(e) => !isReplaying && !isPreviewing && handleMouseDown(e, displayPositions.ball, 'ball')}
+                 onTouchStart={(e) => !isReplaying && !isPreviewing && handleMouseDown(e, displayPositions.ball, 'ball')}
                  style={{ userSelect: 'none' }}>
                 <circle
                   cx={displayPositions.ball.x}

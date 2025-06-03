@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { RotateCcw, Edit3, Check, X, Palette, Save, Trash2, Play, Square, ChevronDown, Home, Pen, ArrowRight, Type, Eraser, Circle, HelpCircle } from 'lucide-react';
 
 const VolleyballPlayRecorder = () => {
@@ -79,6 +79,7 @@ const VolleyballPlayRecorder = () => {
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawingStartPoint, setDrawingStartPoint] = useState(null);
   const [showPlayerHelp, setShowPlayerHelp] = useState(false);
+  const animationShouldStop = useRef(false);
 
   const presetColors = [
     '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899',
@@ -1176,6 +1177,7 @@ const VolleyballPlayRecorder = () => {
     }
     
     console.log('Starting replay from position:', replayPosition);
+    animationShouldStop.current = false; // Reset the stop flag
     setIsPlaying(true);
     
     // Calculate starting step from current scrub position
@@ -1187,7 +1189,7 @@ const VolleyballPlayRecorder = () => {
     for (let i = startStepIndex; i < recordedSteps.length; i++) {
       console.log('Processing step', i + 1, 'of', recordedSteps.length);
       
-      if (!isReplaying) break;
+      if (!isReplaying || animationShouldStop.current) break;
       
       setReplayProgress(i);
       const step = recordedSteps[i];
@@ -1198,7 +1200,7 @@ const VolleyballPlayRecorder = () => {
         const duration = 2000;
         
         const animate = () => {
-          if (!isReplaying) {
+          if (!isReplaying || animationShouldStop.current) {
             resolve();
             return;
           }
@@ -1253,10 +1255,12 @@ const VolleyballPlayRecorder = () => {
         animate();
       });
       
-      if (!isReplaying) break;
+      if (!isReplaying || animationShouldStop.current) break;
       
       // Brief pause between steps
-      await new Promise(resolve => setTimeout(resolve, 500));
+      if (!animationShouldStop.current) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
     }
     
     console.log('Replay completed - resetting to beginning');
@@ -1270,6 +1274,19 @@ const VolleyballPlayRecorder = () => {
     }
     
     setIsPlaying(false);
+  };
+
+  const resetToBeginning = () => {
+    animationShouldStop.current = true; // Immediately stop animation
+    setIsPlaying(false);
+    setReplayPosition(0);
+    setReplayProgress(0);
+    
+    // Reset to initial positions
+    if (recordedSteps.length > 0) {
+      const firstStep = recordedSteps[0];
+      setAnimationPositions(firstStep.startPositions);
+    }
   };
 
   const goHome = () => {
@@ -1676,23 +1693,29 @@ const VolleyballPlayRecorder = () => {
 
         {isReplaying && (
           <>
-            {/* Play Button - Always visible, greyed out when playing */}
+            {/* Play/Reset Button */}
             <button
               onClick={() => {
-                console.log('Play button clicked, isPlaying:', isPlaying);
-                if (!isPlaying) {
+                if (isPlaying) {
+                  resetToBeginning();
+                } else {
+                  console.log('Play button clicked, isPlaying:', isPlaying);
                   startReplay();
                 }
               }}
-              disabled={isPlaying}
-              className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-4 lg:px-6 py-2 sm:py-3 ${
-                isPlaying 
-                  ? 'bg-gray-500 cursor-not-allowed' 
-                  : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 transform hover:scale-105'
-              } text-white rounded-lg sm:rounded-xl font-semibold shadow-lg transition-all duration-200 text-sm sm:text-base`}
+              className="flex items-center gap-1 sm:gap-2 px-3 sm:px-4 lg:px-6 py-2 sm:py-3 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-green-500/25 transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
             >
-              <Play size={14} className="sm:w-4 sm:h-4" />
-              <span>Play</span>
+              {isPlaying ? (
+                <>
+                  <RotateCcw size={14} className="sm:w-4 sm:h-4" />
+                  <span>Reset</span>
+                </>
+              ) : (
+                <>
+                  <Play size={14} className="sm:w-4 sm:h-4" />
+                  <span>Play</span>
+                </>
+              )}
             </button>
             
             {/* Home Button */}

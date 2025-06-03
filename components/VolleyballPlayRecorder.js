@@ -1619,7 +1619,7 @@ const VolleyballPlayRecorder = () => {
       {/* Scrub Bar - Only show when replaying or when there are recorded steps (but not during preview) */}
       {(isReplaying || (!isRecording && !isPreviewing && recordedSteps.length > 0)) && (
         <div className="flex items-center justify-center gap-4 mb-4 sm:mb-6 px-4">
-          <span className="text-sm text-gray-400 min-w-[60px]">
+          <span className="text-sm text-gray-200 min-w-[60px]">
             Step {Math.min(replayProgress + 1, recordedSteps.length)} / {recordedSteps.length}
           </span>
           
@@ -1652,7 +1652,7 @@ const VolleyballPlayRecorder = () => {
             </div>
           </div>
           
-          <span className="text-sm text-gray-400 min-w-[80px] text-right">
+          <span className="text-sm text-gray-200 min-w-[80px] text-right">
             {isReplaying ? (isPlaying ? 'Playing' : 'Ready') : 'Ready'}
           </span>
         </div>
@@ -1894,7 +1894,7 @@ const VolleyballPlayRecorder = () => {
           <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 bg-slate-800/80 text-slate-200 rounded-lg border border-slate-700/50 backdrop-blur-sm text-sm sm:text-base">
             <span className="text-lg sm:text-2xl">⚙️</span>
             <span className="font-medium">SETUP MODE</span>
-            <span className="text-slate-400 hidden sm:inline">- Drag players and ball to position them</span>
+            <span className="text-slate-300 hidden sm:inline">- Drag players and ball to position them</span>
           </div>
         )}
         {isRecording && !isPreviewing && (
@@ -1927,7 +1927,7 @@ const VolleyballPlayRecorder = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-gradient-to-br from-slate-800 to-gray-900 rounded-2xl border border-slate-700 shadow-2xl p-6 w-full max-w-md">
             <h3 className="text-xl font-bold text-white mb-4 text-center">Save Your Play</h3>
-            <p className="text-gray-300 text-sm mb-4 text-center">
+            <p className="text-gray-200 text-sm mb-4 text-center">
               Give your play a name and description for easy identification
             </p>
             
@@ -2108,7 +2108,7 @@ const VolleyballPlayRecorder = () => {
               <div className="grid grid-cols-1 gap-4">
                 <div>
                   <h5 className="font-semibold text-blue-400 mb-2 text-sm">Player Management</h5>
-                  <ol className="list-decimal list-inside space-y-1 text-xs text-gray-300">
+                  <ol className="list-decimal list-inside space-y-1 text-xs text-gray-200">
                     <li><strong className="text-white">Edit Players:</strong> Click the edit icon to modify both name and number</li>
                     <li><strong className="text-white">Player Numbers:</strong> Set custom jersey numbers up to 3 characters (e.g., "10", "A", "L1")</li>
                     <li><strong className="text-white">Change Colors:</strong> Click the palette icon to choose custom colors for each player</li>
@@ -2117,7 +2117,7 @@ const VolleyballPlayRecorder = () => {
                 </div>
                 <div>
                   <h5 className="font-semibold text-green-400 mb-2 text-sm">Team Management</h5>
-                  <ol className="list-decimal list-inside space-y-1 text-xs text-gray-300" start="5">
+                  <ol className="list-decimal list-inside space-y-1 text-xs text-gray-200" start="5">
                     <li><strong className="text-white">Save Teams:</strong> Save your current roster and player setup for future use</li>
                     <li><strong className="text-white">Load Teams:</strong> Use the dropdown to quickly switch between saved team configurations</li>
                     <li><strong className="text-white">Quick Reset:</strong> Use "Reset Numbers" and "Reset Colors" for easy team-wide changes</li>
@@ -2126,7 +2126,7 @@ const VolleyballPlayRecorder = () => {
                 </div>
               </div>
               <div className="mt-3 pt-3 border-t border-slate-600">
-                <p className="text-xs text-slate-400 text-center">
+                <p className="text-xs text-slate-200 text-center">
                   <strong className="text-slate-300">Pro Tip:</strong> Use the team management section to save your roster configurations. This lets you quickly switch between different teams or game scenarios while preserving your custom player names, numbers, and colors.
                 </p>
               </div>
@@ -2265,7 +2265,7 @@ const VolleyballPlayRecorder = () => {
                 {editingPlayer?.id === player.id ? (
                   <div className="flex-1 space-y-3">
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">Player Number (max 3 chars)</label>
+                      <label className="block text-xs text-gray-200 mb-1">Player Number (max 3 chars)</label>
                       <input
                         type="text"
                         value={tempNumber}
@@ -2281,7 +2281,7 @@ const VolleyballPlayRecorder = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-400 mb-1">Player Name</label>
+                      <label className="block text-xs text-gray-200 mb-1">Player Name</label>
                       <input
                         type="text"
                         value={tempName}
@@ -2317,7 +2317,7 @@ const VolleyballPlayRecorder = () => {
                   <>
                     <div className="flex-1 min-w-0">
                       <div className="text-white font-medium text-base truncate">{player.name}</div>
-                      <div className="text-xs text-gray-400">Click edit to modify</div>
+                      <div className="text-xs text-gray-200">Click edit to modify</div>
                     </div>
                     <div className="flex gap-1 flex-shrink-0">
                       <button
@@ -3165,40 +3165,47 @@ const VolleyballPlayRecorder = () => {
                    onMouseDown={(e) => !isReplaying && !isPreviewing && handleMouseDown(e, player, 'away')}
                    onTouchStart={(e) => !isReplaying && !isPreviewing && handleMouseDown(e, player, 'away')}
                    style={{ userSelect: 'none' }}>
+                  {/* Larger touch target for mobile */}
                   <circle
                     cx={player.x}
                     cy={player.y}
-                    r="40"
+                    r="50"
                     fill="transparent"
                     className="sm:hidden"
                   />
+                  {/* Bigger circle for mobile visibility */}
                   <circle
                     cx={player.x}
                     cy={player.y}
-                    r="32"
+                    r="38"
                     fill={`url(#playerGradient-${player.id})`}
                     stroke="white"
-                    strokeWidth="4"
+                    strokeWidth="5"
+                    className="sm:r-32 sm:stroke-4"
                   />
+                  {/* Bigger position number */}
                   <text
                     x={player.x}
-                    y={player.y + 4}
+                    y={player.y + 5}
                     textAnchor="middle"
-                    fontSize="18"
+                    fontSize="22"
                     fontWeight="bold"
                     fill="white"
                     pointerEvents="none"
+                    className="sm:text-lg"
                   >
                     {player.position}
                   </text>
+                  {/* Bigger player name */}
                   <text
                     x={player.x}
-                    y={player.y + 48}
+                    y={player.y + 55}
                     textAnchor="middle"
-                    fontSize="14"
+                    fontSize="16"
                     fontWeight="600"
                     fill="white"
                     pointerEvents="none"
+                    className="sm:text-sm"
                   >
                     {player.name}
                   </text>
@@ -3212,40 +3219,47 @@ const VolleyballPlayRecorder = () => {
                    onMouseDown={(e) => !isReplaying && !isPreviewing && handleMouseDown(e, player, 'home')}
                    onTouchStart={(e) => !isReplaying && !isPreviewing && handleMouseDown(e, player, 'home')}
                    style={{ userSelect: 'none' }}>
+                  {/* Larger touch target for mobile */}
                   <circle
                     cx={player.x}
                     cy={player.y}
-                    r="40"
+                    r="50"
                     fill="transparent"
                     className="sm:hidden"
                   />
+                  {/* Bigger circle for mobile visibility */}
                   <circle
                     cx={player.x}
                     cy={player.y}
-                    r="32"
+                    r="38"
                     fill={`url(#playerGradient-${player.id})`}
                     stroke="white"
-                    strokeWidth="4"
+                    strokeWidth="5"
+                    className="sm:r-32 sm:stroke-4"
                   />
+                  {/* Bigger position number */}
                   <text
                     x={player.x}
-                    y={player.y + 4}
+                    y={player.y + 5}
                     textAnchor="middle"
-                    fontSize="18"
+                    fontSize="22"
                     fontWeight="bold"
                     fill="white"
                     pointerEvents="none"
+                    className="sm:text-lg"
                   >
                     {player.position}
                   </text>
+                  {/* Bigger player name */}
                   <text
                     x={player.x}
-                    y={player.y + 48}
+                    y={player.y + 55}
                     textAnchor="middle"
-                    fontSize="14"
+                    fontSize="16"
                     fontWeight="600"
                     fill="white"
                     pointerEvents="none"
+                    className="sm:text-sm"
                   >
                     {player.name}
                   </text>
@@ -3257,17 +3271,23 @@ const VolleyballPlayRecorder = () => {
                  onMouseDown={(e) => !isReplaying && !isPreviewing && handleMouseDown(e, displayPositions.ball, 'ball')}
                  onTouchStart={(e) => !isReplaying && !isPreviewing && handleMouseDown(e, displayPositions.ball, 'ball')}
                  style={{ userSelect: 'none' }}>
+                {/* Larger touch target for mobile */}
                 <circle
                   cx={displayPositions.ball.x}
                   cy={displayPositions.ball.y}
-                  r="35"
+                  r="45"
                   fill="transparent"
                   className="sm:hidden"
                 />
-                <use
-                  href="#modernVolleyball"
-                  x={displayPositions.ball.x}
-                  y={displayPositions.ball.y}
+                {/* Bigger ball for mobile visibility */}
+                <circle
+                  cx={displayPositions.ball.x}
+                  cy={displayPositions.ball.y}
+                  r="26"
+                  fill="white" 
+                  stroke="#000000" 
+                  strokeWidth="4"
+                  className="sm:r-22 sm:stroke-3"
                 />
               </g>
 

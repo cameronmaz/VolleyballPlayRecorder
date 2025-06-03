@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { RotateCcw, Edit3, Check, X, Palette, Save, Trash2, Play, Square, ChevronDown, Home, Pen, ArrowRight, Type, Eraser, Circle, HelpCircle } from 'lucide-react';
+import { RotateCcw, Edit3, Check, X, Palette, Save, Trash2, Play, Square, ChevronDown, Home, Pen, ArrowRight, Type, Eraser, Circle, HelpCircle, RotateCw } from 'lucide-react';
 
 const VolleyballPlayRecorder = () => {
   const [homeTeam, setHomeTeam] = useState([
@@ -1276,6 +1276,54 @@ const VolleyballPlayRecorder = () => {
     setIsPlaying(false);
   };
 
+  const rotatePositions = () => {
+    // Volleyball rotation: move players to new physical positions
+    // Uses array indices instead of position numbers to work with custom numbers
+    // Player 0→5, 1→0, 2→1, 3→2, 4→3, 5→4 (array indices)
+    
+    setHomeTeam(prev => {
+      if (prev.length < 6) return prev; // Safety check
+      
+      // Store original positions using array indices
+      const locations = prev.map(player => ({ x: player.x, y: player.y }));
+      
+      // Move each player to their new location based on rotation
+      return prev.map((player, index) => {
+        // Rotation mapping: 0→5, 1→0, 2→1, 3→2, 4→3, 5→4
+        let newLocationIndex;
+        if (index === 0) newLocationIndex = 5; // Player at index 0 goes to position of player at index 5
+        else newLocationIndex = index - 1; // All others move back one position
+        
+        return {
+          ...player,
+          x: locations[newLocationIndex].x,
+          y: locations[newLocationIndex].y
+        };
+      });
+    });
+    
+    setAwayTeam(prev => {
+      if (prev.length < 6) return prev; // Safety check
+      
+      // Store original positions using array indices  
+      const locations = prev.map(player => ({ x: player.x, y: player.y }));
+      
+      // Move each player to their new location based on rotation
+      return prev.map((player, index) => {
+        // Rotation mapping: 0→5, 1→0, 2→1, 3→2, 4→3, 5→4
+        let newLocationIndex;
+        if (index === 0) newLocationIndex = 5; // Player at index 0 goes to position of player at index 5
+        else newLocationIndex = index - 1; // All others move back one position
+        
+        return {
+          ...player,
+          x: locations[newLocationIndex].x,
+          y: locations[newLocationIndex].y
+        };
+      });
+    });
+  };
+
   const resetToBeginning = () => {
     animationShouldStop.current = true; // Immediately stop animation
     setIsPlaying(false);
@@ -1731,6 +1779,15 @@ const VolleyballPlayRecorder = () => {
         
         {!isRecording && !isReplaying && (
           <>
+            <button
+              onClick={rotatePositions}
+              className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 lg:px-5 py-2 sm:py-3 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-indigo-500/25 transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
+              title="Rotate players physically around court (works with any player numbers)"
+            >
+              <RotateCw size={14} className="sm:w-4 sm:h-4" />
+              <span>Rotate</span>
+            </button>
+
             <button
               onClick={() => setShowPlayerDrawer(!showPlayerDrawer)}
               className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 lg:px-5 py-2 sm:py-3 bg-gradient-to-r from-purple-500 to-violet-600 hover:from-purple-600 hover:to-violet-700 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-purple-500/25 transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"

@@ -25,6 +25,14 @@ const VolleyballPlayRecorder = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedSteps, setRecordedSteps] = useState([]);
   const [savedPlays, setSavedPlays] = useState([]);
+  const [folders, setFolders] = useState([
+    { id: 'default', name: 'General Plays', createdAt: new Date().toLocaleString() }
+  ]);
+  const [currentFolder, setCurrentFolder] = useState('default');
+  const [showCreateFolderDialog, setShowCreateFolderDialog] = useState(false);
+  const [showFolderDropdown, setShowFolderDropdown] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [expandedFolders, setExpandedFolders] = useState(new Set(['default']));
   const [currentPlay, setCurrentPlay] = useState(null);
   const [isReplaying, setIsReplaying] = useState(false);
   const [replayProgress, setReplayProgress] = useState(0);
@@ -79,6 +87,13 @@ const VolleyballPlayRecorder = () => {
 
   const courtWidth = 800;
   const courtHeight = 960;
+
+  // Migrate existing plays to default folder
+  useEffect(() => {
+    setSavedPlays(prev => prev.map(play => 
+      play.folderId ? play : { ...play, folderId: 'default' }
+    ));
+  }, []);
 
   // Load saved teams from memory on component mount
   useEffect(() => {
@@ -929,6 +944,65 @@ const VolleyballPlayRecorder = () => {
     }
   };
 
+  const createFolder = () => {
+    if (!newFolderName.trim()) return;
+    
+    const folder = {
+      id: Date.now().toString(),
+      name: newFolderName.trim(),
+      createdAt: new Date().toLocaleString()
+    };
+    
+    setFolders(prev => [...prev, folder]);
+    setExpandedFolders(prev => new Set([...prev, folder.id]));
+    setNewFolderName('');
+    setShowCreateFolderDialog(false);
+  };
+
+  const deleteFolder = (folderId) => {
+    if (folderId === 'default') return; // Can't delete default folder
+    
+    // Move all plays from this folder to default
+    setSavedPlays(prev => prev.map(play => 
+      play.folderId === folderId ? { ...play, folderId: 'default' } : play
+    ));
+    
+    // Remove the folder
+    setFolders(prev => prev.filter(folder => folder.id !== folderId));
+    setExpandedFolders(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(folderId);
+      return newSet;
+    });
+    
+    // If current folder was deleted, switch to default
+    if (currentFolder === folderId) {
+      setCurrentFolder('default');
+    }
+  };
+
+  const toggleFolder = (folderId) => {
+    setExpandedFolders(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(folderId)) {
+        newSet.delete(folderId);
+      } else {
+        newSet.add(folderId);
+      }
+      return newSet;
+    });
+  };
+
+  const movePlayToFolder = (playId, newFolderId) => {
+    setSavedPlays(prev => prev.map(play => 
+      play.id === playId ? { ...play, folderId: newFolderId } : play
+    ));
+  };
+
+  const getPlaysInFolder = (folderId) => {
+    return savedPlays.filter(play => play.folderId === folderId);
+  };
+
   const savePlay = () => {
     if (!playName.trim()) return;
     
@@ -941,7 +1015,8 @@ const VolleyballPlayRecorder = () => {
       shared: false,
       createdAt: new Date().toLocaleString(),
       likes: 0,
-      category: 'Custom'
+      category: 'Custom',
+      folderId: currentFolder // Add folder ID
     };
     
     setSavedPlays(prev => [...prev, play]);
@@ -960,6 +1035,8 @@ const VolleyballPlayRecorder = () => {
     setIsRecording(false);
     setRecordedSteps([]);
     setMovementArrows([]);
+    setCurrentFolder('default');
+    setShowFolderDropdown(false);
   };
 
   const loadPlay = (play) => {
@@ -1320,11 +1397,21 @@ const VolleyballPlayRecorder = () => {
     updateScrubberPosition(e);
   };
 
+  const handleScrubberTouchStart = (e) => {
+    if (!recordedSteps.length) return;
+    e.preventDefault();
+    setIsDraggingScrubber(true);
+    updateScrubberPosition(e);
+  };
+
   const updateScrubberPosition = (e) => {
     if (!recordedSteps.length) return;
     const scrubBar = e.currentTarget.closest('.scrub-bar') || e.currentTarget;
     const rect = scrubBar.getBoundingClientRect();
-    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+    
+    // Handle both mouse and touch events
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
     const position = x / rect.width;
     jumpToPosition(position);
   };
@@ -1418,17 +1505,38 @@ const VolleyballPlayRecorder = () => {
       const position = x / rect.width;
       jumpToPosition(position);
     };
+
+    const handleTouchMove = (e) => {
+      if (!recordedSteps.length) return;
+      e.preventDefault();
+      const scrubBar = document.querySelector('.scrub-bar');
+      if (!scrubBar) return;
+      
+      const rect = scrubBar.getBoundingClientRect();
+      const touch = e.touches[0];
+      const x = Math.max(0, Math.min(touch.clientX - rect.left, rect.width));
+      const position = x / rect.width;
+      jumpToPosition(position);
+    };
     
     const handleMouseUp = () => {
       setIsDraggingScrubber(false);
     };
 
+    const handleTouchEnd = () => {
+      setIsDraggingScrubber(false);
+    };
+
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    document.addEventListener('touchend', handleTouchEnd);
 
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('touchmove', handleTouchMove);
+      document.removeEventListener('touchend', handleTouchEnd);
     };
   }, [isDraggingScrubber, recordedSteps.length]);
 
@@ -1452,6 +1560,7 @@ const VolleyballPlayRecorder = () => {
             <div 
               className="scrub-bar relative h-2 bg-slate-600 rounded-full cursor-pointer"
               onMouseDown={handleScrubberMouseDown}
+              onTouchStart={handleScrubberTouchStart}
             >
               {/* Progress track */}
               <div 
@@ -1609,7 +1718,7 @@ const VolleyballPlayRecorder = () => {
               onClick={() => setShowPlaysDrawer(!showPlaysDrawer)}
               className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 lg:px-5 py-2 sm:py-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-lg sm:rounded-xl font-semibold shadow-lg hover:shadow-emerald-500/25 transform hover:scale-105 transition-all duration-200 text-sm sm:text-base"
             >
-              <span>{savedPlays.length > 0 ? `Plays (${savedPlays.length})` : 'Plays'}</span>
+              <span>{savedPlays.length > 0 ? `Playbook (${savedPlays.length})` : 'Playbook'}</span>
             </button>
           </>
         )}
@@ -1739,6 +1848,60 @@ const VolleyballPlayRecorder = () => {
             <p className="text-gray-300 text-sm mb-4 text-center">
               Give your play a name and description for easy identification
             </p>
+            
+            {/* Folder Selection */}
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-gray-300 mb-2">Save to Folder</label>
+              <div className="relative">
+                <button
+                  onClick={() => setShowFolderDropdown(!showFolderDropdown)}
+                  className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white hover:bg-slate-700/70 transition-colors flex items-center justify-between"
+                >
+                  <span>{folders.find(f => f.id === currentFolder)?.name || 'General Plays'}</span>
+                  <ChevronDown size={16} className={`transition-transform ${showFolderDropdown ? 'rotate-180' : ''}`} />
+                </button>
+                
+                {showFolderDropdown && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-40"
+                      onClick={() => setShowFolderDropdown(false)}
+                    />
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg z-50 max-h-48 overflow-y-auto">
+                      {folders.map(folder => (
+                        <button
+                          key={folder.id}
+                          onClick={() => {
+                            setCurrentFolder(folder.id);
+                            setShowFolderDropdown(false);
+                          }}
+                          className={`w-full px-4 py-3 text-left transition-colors ${
+                            currentFolder === folder.id 
+                              ? 'bg-blue-600/20 text-blue-300' 
+                              : 'text-white hover:bg-slate-700/50 hover:text-blue-300'
+                          }`}
+                        >
+                          {folder.name}
+                        </button>
+                      ))}
+                      <div className="border-t border-slate-600 mt-1 pt-1">
+                        <button
+                          onClick={() => {
+                            setShowFolderDropdown(false);
+                            setShowCreateFolderDialog(true);
+                          }}
+                          className="w-full px-4 py-3 text-left text-green-400 hover:bg-green-600/20 transition-colors flex items-center gap-2"
+                        >
+                          <span className="text-lg">+</span>
+                          Create New Folder
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+            
             <input
               type="text"
               value={playName}
@@ -1781,6 +1944,51 @@ const VolleyballPlayRecorder = () => {
                 className="flex-1 px-4 py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-lg font-semibold disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed transition-all"
               >
                 Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Folder Dialog */}
+      {showCreateFolderDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4" style={{ zIndex: 9999 }}>
+          <div className="bg-gradient-to-br from-slate-800 to-gray-900 rounded-2xl border border-slate-700 shadow-2xl p-6 w-full max-w-md">
+            <h3 className="text-xl font-bold text-white mb-4 text-center">Create New Folder</h3>
+            <p className="text-gray-300 text-sm mb-4 text-center">
+              Organize your plays into folders for better management
+            </p>
+            <input
+              type="text"
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              placeholder="Enter folder name (e.g., 'Offensive Plays', 'Defensive Sets')"
+              className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none mb-4"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && newFolderName.trim()) createFolder();
+                if (e.key === 'Escape') {
+                  setShowCreateFolderDialog(false);
+                  setNewFolderName('');
+                }
+              }}
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowCreateFolderDialog(false);
+                  setNewFolderName('');
+                }}
+                className="flex-1 px-4 py-3 bg-slate-600/50 hover:bg-slate-600/70 text-white rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={createFolder}
+                disabled={!newFolderName.trim()}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-lg font-semibold disabled:from-gray-500 disabled:to-gray-600 disabled:cursor-not-allowed transition-all"
+              >
+                Create Folder
               </button>
             </div>
           </div>
@@ -2546,55 +2754,131 @@ const VolleyballPlayRecorder = () => {
       }`}>
         <div className="flex items-center justify-between p-6 border-b border-slate-700/50">
           <h3 className="font-bold text-xl text-white">Saved Plays</h3>
-          <button
-            onClick={() => setShowPlaysDrawer(false)}
-            className="p-2 text-gray-400 hover:text-white hover:bg-slate-600/30 rounded-lg transition-colors"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowCreateFolderDialog(true)}
+              className="p-2 text-gray-400 hover:text-white hover:bg-slate-600/30 rounded-lg transition-colors"
+              title="Create new folder"
+            >
+              <span className="text-lg">📁+</span>
+            </button>
+            <button
+              onClick={() => setShowPlaysDrawer(false)}
+              className="p-2 text-gray-400 hover:text-white hover:bg-slate-600/30 rounded-lg transition-colors"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
         
         <div className="p-6 overflow-y-auto h-full pb-24">
-          {savedPlays.length === 0 ? (
+          {folders.length === 0 ? (
             <div className="text-center py-12">
-              <div className="text-6xl mb-4">🏐</div>
-              <p className="text-gray-400 text-lg">No saved plays yet</p>
-              <p className="text-gray-500 text-sm mt-2">Record and save plays to build your playbook</p>
+              <div className="text-6xl mb-4">📁</div>
+              <p className="text-gray-400 text-lg">No folders yet</p>
+              <p className="text-gray-500 text-sm mt-2">Create folders to organize your plays</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {savedPlays.map(play => (
-                <div key={play.id} className="p-4 rounded-lg bg-slate-700/30 border border-slate-600/30 hover:bg-slate-700/50 transition-colors">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold text-white text-base truncate">{play.name}</h4>
-                      <p className="text-sm text-gray-400">{play.steps.length} steps • {play.createdAt}</p>
-                      {play.description && (
-                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">{play.description}</p>
+            <div className="space-y-2">
+              {folders.map(folder => {
+                const playsInFolder = getPlaysInFolder(folder.id);
+                const isExpanded = expandedFolders.has(folder.id);
+                
+                return (
+                  <div key={folder.id} className="border border-slate-600/30 rounded-lg overflow-hidden">
+                    {/* Folder Header */}
+                    <div className="flex items-center justify-between p-3 bg-slate-700/20 hover:bg-slate-700/40 transition-colors">
+                      <button
+                        onClick={() => toggleFolder(folder.id)}
+                        className="flex items-center gap-2 flex-1 text-left"
+                      >
+                        <ChevronDown 
+                          size={16} 
+                          className={`transition-transform ${isExpanded ? 'rotate-0' : '-rotate-90'}`}
+                        />
+                        <span className="text-lg">📁</span>
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-white text-base">{folder.name}</h4>
+                          <p className="text-xs text-gray-400">{playsInFolder.length} plays</p>
+                        </div>
+                      </button>
+                      
+                      {folder.id !== 'default' && (
+                        <button
+                          onClick={() => deleteFolder(folder.id)}
+                          className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded transition-colors"
+                          title="Delete folder"
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       )}
                     </div>
+                    
+                    {/* Folder Contents */}
+                    {isExpanded && (
+                      <div className="p-2 space-y-2 bg-slate-800/30">
+                        {playsInFolder.length === 0 ? (
+                          <div className="text-center py-6">
+                            <div className="text-3xl mb-2">🏐</div>
+                            <p className="text-gray-500 text-sm">No plays in this folder</p>
+                          </div>
+                        ) : (
+                          playsInFolder.map(play => (
+                            <div key={play.id} className="p-3 rounded-lg bg-slate-700/30 border border-slate-600/30 hover:bg-slate-700/50 transition-colors">
+                              <div className="flex items-start justify-between mb-2">
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="font-semibold text-white text-sm truncate">{play.name}</h4>
+                                  <p className="text-xs text-gray-400">{play.steps.length} steps • {play.createdAt}</p>
+                                  {play.description && (
+                                    <p className="text-xs text-gray-500 mt-1 line-clamp-2">{play.description}</p>
+                                  )}
+                                </div>
+                              </div>
+                              
+                              <div className="flex gap-2 mt-2">
+                                <button
+                                  onClick={() => {
+                                    loadPlay(play);
+                                    setShowPlaysDrawer(false);
+                                  }}
+                                  className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded text-xs transition-colors"
+                                >
+                                  <Play size={12} />
+                                  Load
+                                </button>
+                                
+                                {/* Move to folder dropdown */}
+                                <div className="relative">
+                                  <select
+                                    value={play.folderId}
+                                    onChange={(e) => movePlayToFolder(play.id, e.target.value)}
+                                    className="px-2 py-1.5 bg-slate-600/50 border border-slate-500 rounded text-xs text-white cursor-pointer hover:bg-slate-600/70 transition-colors"
+                                    title="Move to folder"
+                                  >
+                                    {folders.map(f => (
+                                      <option key={f.id} value={f.id}>
+                                        {f.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                
+                                <button
+                                  onClick={() => deletePlay(play.id)}
+                                  className="px-2 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded text-xs transition-colors"
+                                  title="Delete play"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <div className="flex gap-2 mt-3">
-                    <button
-                      onClick={() => {
-                        loadPlay(play);
-                        setShowPlaysDrawer(false);
-                      }}
-                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 rounded-lg transition-colors"
-                    >
-                      <Play size={16} />
-                      Load Play
-                    </button>
-                    <button
-                      onClick={() => deletePlay(play.id)}
-                      className="px-3 py-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded-lg transition-colors"
-                      title="Delete play"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -2608,6 +2892,7 @@ const VolleyballPlayRecorder = () => {
             setShowPlayerDrawer(false);
             setShowPlaysDrawer(false);
             setShowTeamDropdown(false);
+            setShowFolderDropdown(false);
           }}
         />
       )}

@@ -410,7 +410,9 @@ const VolleyballPlayRecorder = () => {
     const frontRowPlayers = currentTeam.filter(p => frontRow.includes(p.position)).sort((a, b) => a.x - b.x);
     const backRowPlayers = currentTeam.filter(p => backRow.includes(p.position)).sort((a, b) => a.x - b.x);
     
-    // Front-to-back constraints (y-coordinate)
+    // Front-to-back constraints (y-coordinate) - with buffer for easier grabbing
+    const verticalBuffer = 15; // Smaller buffer for vertical movement
+    
     if (backRow.includes(playerPos)) {
       // Find corresponding front row player by X position
       const playerIndex = backRowPlayers.findIndex(p => p.position === playerPos);
@@ -418,11 +420,11 @@ const VolleyballPlayRecorder = () => {
       
       if (correspondingFrontPlayer) {
         if (team === 'away') {
-          // For away team, back row cannot move past front row toward net (larger Y)
-          constrainedY = Math.min(constrainedY, correspondingFrontPlayer.y);
+          // For away team, back row cannot move too close to front row toward net
+          constrainedY = Math.min(constrainedY, correspondingFrontPlayer.y - verticalBuffer);
         } else {
-          // For home team, back row cannot move past front row toward net (smaller Y)
-          constrainedY = Math.max(constrainedY, correspondingFrontPlayer.y);
+          // For home team, back row cannot move too close to front row toward net
+          constrainedY = Math.max(constrainedY, correspondingFrontPlayer.y + verticalBuffer);
         }
       }
     } else if (frontRow.includes(playerPos)) {
@@ -432,11 +434,11 @@ const VolleyballPlayRecorder = () => {
       
       if (correspondingBackPlayer) {
         if (team === 'away') {
-          // For away team, front row cannot move past back row away from net (smaller Y)
-          constrainedY = Math.max(constrainedY, correspondingBackPlayer.y);
+          // For away team, front row cannot move too close to back row
+          constrainedY = Math.max(constrainedY, correspondingBackPlayer.y + verticalBuffer);
         } else {
-          // For home team, front row cannot move past back row away from net (larger Y)
-          constrainedY = Math.min(constrainedY, correspondingBackPlayer.y);
+          // For home team, front row cannot move too close to back row
+          constrainedY = Math.min(constrainedY, correspondingBackPlayer.y - verticalBuffer);
         }
       }
     }
